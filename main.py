@@ -3,13 +3,26 @@ import sys
 import gym
 from custom_envs import *
 import time
-from Q_Learning import Q_Learning
+from stable_baselines3 import DDPG
+from stable_baselines3.common.noise import NormalActionNoise
+from stable_baselines3.ddpg.policies import MlpPolicy
+from stable_baselines3.common.evaluation import evaluate_policy
 import numpy as np
+from joblib import load
+import os
 
-data, gas_data = get_hvac_data()
+
+data = get_hvac_data()
+ml_model = load('ml_models/Building01_LinearRegression.joblib')
+scaler_X = load('scalers/Building01_LinearRegression_Scaler_X.joblib')
+scaler_y = load('scalers/Building01_LinearRegression_Scaler_y.joblib')
+feature_order = load('feature_order/Building01_LinearRegression_Features.joblib')
+target_order = load('feature_order/Building01_LinearRegression_Targets.joblib')
+
 
 env = gym.make('CustomEnv-v0')
-env.pass_df(data, gas_data)
+env.pass_df(data)
+env.pass_model_details(ml_model, scaler_X, scaler_y, feature_order, target_order)
 
 print(env.observation_space)
 print(env.action_space)
@@ -18,77 +31,32 @@ print(env.spec.max_episode_steps)
 print(env.spec.reward_threshold)
 
 
-# here define the parameters for state discretization
-upperBounds = env.observation_space.high
-lowerBounds = env.observation_space.low
-print(upperBounds, lowerBounds)
-numberOfBinsTemp = 50
-numberOfBinsHumid = 50
-numberOfBins=[numberOfBinsTemp, numberOfBinsHumid]
-
-# define the parameters
-alpha = 0.1
-gamma = 1
-epsilon = 0.2
-timeSteps = 99
-numSpaces = 4
-episodeNumber = 25000
+state = env.reset()
+for _ in range(10):  
+    action = env.action_space.sample()  # Replace with your model's action
+    next_state, reward, done, info = env.step(action)
+    env.render()
+    if done:
+        break
 
 
-# Simulation Training with Q-Matrix
-env = gym.make('CustomEnv-v0')
-env.pass_df(data, gas_data)
+# n_actions = env.action_space.shape[-1]
+# action_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions))
 
-Q1 = Q_Learning(env, alpha, gamma, epsilon, episodeNumber, timeSteps, numSpaces, numberOfBins, lowerBounds, upperBounds)
-Q1.simulateEpisodes()
+# model = DDPG(MlpPolicy, env, action_noise=action_noise, verbose=1, tensorboard_log="./ddpg_hvac_tensorboard/")
+# model.learn(total_timesteps=10000)
 
-# Simulation Evaluation with Learned Policy
-env1 = gym.make('CustomEnv-v0')
-env1.pass_df(data, gas_data)
+# model.save("ddpg_models/ddpg_hvac_control")
+# del model
 
-episode_rewards = []
+# model = DDPG.load("ddpg_models/ddpg_hvac_control")
 
-for episodeIndex in range(10):
-    total_rewards_ep = 0
-    state = env1.reset()
-    print("Episode no. ", episodeIndex)
-    
-    for timeIndex in range(timeSteps):
-        # select greedy actions
-        greedy_action = Q1.greedy_policy(state)   
-        state, reward, terminated, info = env1.step(greedy_action)
+# mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=10)
+# print(f"Mean reward: {mean_reward}, Std Reward: {std_reward}")
 
-        total_rewards_ep += reward
-        
-        if terminated:
-            break    
-
-    print(f"Episode {episodeIndex} Reward {total_rewards_ep}")
-    episode_rewards.append(total_rewards_ep)
-    
-print(f"Final Episode Rewards: {episode_rewards}")
-
-
-# Simulation Evaluation with Random Actions 
-env2 = gym.make('CustomEnv-v0')
-env2.pass_df(data, gas_data)
-
-episode_rewards = []
-
-for episodeIndex in range(10):
-    total_rewards_ep = 0
-    initial_state = env2.reset()
-    print("Episode no. ", episodeIndex)
-    
-    for timeIndex in range(timeSteps):
-        random_action = env2.action_space.sample()
-        state, reward, terminated, info = env2.step(random_action)
-        total_rewards_ep += reward
-        
-        if terminated:
-            break    
-
-    print(f"Episode {episodeIndex} Reward {total_rewards_ep}")
-    episode_rewards.append(total_rewards_ep)
-    
-print(f"Final Episode Rewards: {episode_rewards}")
+# state = env.reset()
+# dones = True
+# while dones:
+#     action, _states = model.predict(state)
+#     state, rewards, done, info = env.step(action)
+#     env.render()
