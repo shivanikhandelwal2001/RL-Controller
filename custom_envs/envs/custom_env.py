@@ -4,6 +4,7 @@ from gym.utils import seeding
 import numpy as np
 import pandas as pd
 from joblib import load
+import matplotlib.pyplot as plt
 
 beta = 0.6
 setpoint_temp = 23
@@ -27,11 +28,20 @@ class HVACEnv(gym.Env):
         n_temp, n_humi = len(temp_columns), len(humi_columns)
         
         self.state_variables = [col for col in df.columns if (col.endswith("Air_temperature")) or col.endswith("Relative_humidity")]
-        self.control_variables = [col for col in df.columns if col not in self.state_variables + ['Gas_volume']]
+        self.control_variables = [col for col in df.columns if col not in self.state_variables]
         
         self.max_lag = 2
         self.rolling_window_sizes = [12, 48]
-        self.buffer_df = pd.DataFrame(columns=self.state_variables)
+        self.current_step = 3
+        # self.buffer_df = pd.DataFrame(columns=self.state_variables)
+        # initial_rows = min(self.current_step, len(df))
+        self.refresh_step = 0
+        self.max_refresh_step = 6
+        
+        self.buffer_df = self.df[self.state_variables].head(self.current_step)
+        
+        self.actuals_df = pd.DataFrame(columns=self.state_variables+["Gas_volume"])
+        self.predictions_df = pd.DataFrame(columns=self.state_variables+["Gas_volume"])
         
         low_bounds = np.array([0] * n_temp + [0] * n_humi)
         high_bounds = np.array([50] * n_temp + [100] * n_humi)
@@ -63,22 +73,33 @@ class HVACEnv(gym.Env):
         
         for feature, value in updated_features.items():
             self.control[feature] = value
-            
+        
+        actual_gas_volume = self.control['Gas_volume']
         self.control['Gas_volume'] = gas_volume
-        
-        self.control = self.control[self.feature_order]
+        self.control = pd.DataFrame([self.control[self.feature_order]])
         print(f"Control Variables for ML Model Prediction {self.control}")
-        nan_columns = self.control[self.control.isna()]
-        print(nan_columns.index.tolist())
         
-        control_scaled = self.scaler_X.transform(np.array(self.control).reshape(1, -1))
+        actual_next_state = self.df[self.state_variables].iloc[self.current_step]
+        actual_next_state["Gas_volume"] = actual_gas_volume
+        
+        control_scaled = self.scaler_X.transform(self.control)
         
         predicted_next_state = self.ml_model.predict(control_scaled)
         predicted_next_state = self.scaler_y.inverse_transform(predicted_next_state)
         
         self.predicted_next_state_series = pd.Series(predicted_next_state.flatten(), index=self.target_order)
+        self.predicted_next_state_series["Gas_volume"] = gas_volume
         
+        self.actuals_df = pd.concat([self.actuals_df, pd.DataFrame([actual_next_state])], ignore_index=True)
+        self.predictions_df = pd.concat([self.predictions_df, pd.DataFrame([self.predicted_next_state_series])], ignore_index=True)
+        
+        # if self.refresh_step < self.max_refresh_step:
+        #     self.refresh_step += 1
         self.update_buffer(self.predicted_next_state_series)
+            
+        # else:
+        #     self.refresh_step = 0
+        #     self.update_buffer(self.df[self.state_variables].iloc[self.current_step])
     
     
     def _calculate_reward(self):
@@ -108,7 +129,7 @@ class HVACEnv(gym.Env):
         avg_temp_comfort = sum(temp_comfort_scores) / len(temp_comfort_scores)
         avg_humidity_comfort = sum(humidity_comfort_scores) / len(humidity_comfort_scores)
     
-        print(f"Avg Temp and Humi for Comfort {avg_temp_comfort} {avg_humidity_comfort}")
+        # print(f"Avg Temp and Humi for Comfort {avg_temp_comfort} {avg_humidity_comfort}")
         combined_comfort = (avg_temp_comfort + avg_humidity_comfort) / 2
 
         self.reward = -(beta * self.action) + (1 - beta) * combined_comfort
@@ -144,14 +165,22 @@ class HVACEnv(gym.Env):
     
             
     def step(self, action):
-        self.current_step += 1
         self.action = action
         
         self._take_action()
         self._calculate_reward()
             
-        done = (self.reward>2.5) or (self.current_step >= len(self.df.index) - 1)
+        # done = (self.reward>2.5) or (self.current_step >= len(self.df.index) - 1)
+        done = (self.reward>2.5) or (self.current_step >= 20)
         next_state = self.extract_next_state_from_buffer()
+        self.state = next_state
+        
+        print(f"Step: {self.current_step}")
+        print(f"State: {self.state}")
+        print(f"Action: {self.action}")
+        print(f"Reward: {self.reward}")
+        
+        self.current_step += 1
         
         return next_state, self.reward, done, {}
     
@@ -162,9 +191,10 @@ class HVACEnv(gym.Env):
     
     
     def reset(self):
-    # Reset the state of the environment to an initial state
-        self.current_step = 0
+        # Reset the state of the environment to an initial state
+        self.current_step = 3
         self.state = self.df[self.state_variables].iloc[self.current_step].values
+        self.buffer_df = self.df[self.state_variables].head(self.current_step)
         
         return self.state
     
@@ -177,6 +207,7 @@ class HVACEnv(gym.Env):
         self.buffer_df = pd.concat([self.buffer_df, pd.DataFrame([new_row[self.state_variables]])], ignore_index=True)
         
         max_size = max(self.max_lag, max(self.rolling_window_sizes))
+        max_size = self.max_lag
         if len(self.buffer_df) > max_size:
             self.buffer_df.drop(self.buffer_df.index[:len(self.buffer_df)-max_size], inplace=True)
 
@@ -198,16 +229,16 @@ class HVACEnv(gym.Env):
                 else:
                     features[f"{col}_{lag}"] = self.buffer_df[col].iloc[-1] if not self.buffer_df[col].empty else 0
         
-        for col in self.state_variables:
-            for window_size in self.rolling_window_sizes:
-                if len(self.buffer_df) >= window_size:
-                    features[f"{col}_rolling_{window_size}_mean"] = self.buffer_df[col].shift(1).rolling(window=window_size).mean().iloc[-1]
-                    features[f"{col}_rolling_{window_size}_std"] = self.buffer_df[col].shift(1).rolling(window=window_size).std().iloc[-1]
-                else:
-                    mean_value = self.buffer_df[col].mean() if not self.buffer_df[col].empty else 0
-                    std_value = self.buffer_df[col].std() if not self.buffer_df[col].empty else 0
-                    features[f"{col}_rolling_{window_size}_mean"] = mean_value
-                    features[f"{col}_rolling_{window_size}_std"] = std_value
+        # for col in self.state_variables:
+        #     for window_size in self.rolling_window_sizes:
+        #         if len(self.buffer_df) >= window_size:
+        #             features[f"{col}_rolling_{window_size}_mean"] = self.buffer_df[col].shift(1).rolling(window=window_size).mean().iloc[-1]
+        #             features[f"{col}_rolling_{window_size}_std"] = self.buffer_df[col].shift(1).rolling(window=window_size).std().iloc[-1]
+        #         else:
+        #             mean_value = self.buffer_df[col].mean() if not self.buffer_df[col].empty else 0
+        #             std_value = self.buffer_df[col].std() if not self.buffer_df[col].empty else 0
+        #             features[f"{col}_rolling_{window_size}_mean"] = mean_value
+        #             features[f"{col}_rolling_{window_size}_std"] = std_value
 
         return features
     
@@ -217,3 +248,22 @@ class HVACEnv(gym.Env):
             print(f"Step: {self.current_step}")
             print(f"State: {self.state}")
             print(f"Action: {self.action}")
+
+
+    def plot_predictions(self):
+        self.actuals_df.to_csv("actual_df.csv")
+        self.predictions_df.to_csv("predictions_df.csv")
+        for col in self.state_variables+["Gas_volume"]:
+            fig, ax = plt.subplots(figsize=(20, 12))
+            actual_values = self.actuals_df[col].tolist()
+            predicted_values = self.predictions_df[col].tolist()
+
+            ax.plot(actual_values, label='Actual')
+            ax.plot(predicted_values, label='Predicted', linestyle='--')
+            ax.set_title(f'Actual vs Predicted Values for {col}')
+            ax.set_xlabel('Time Steps')
+            ax.set_ylabel('Values')
+            ax.legend()
+
+            plt.savefig(f'plots/{col}_plot.png')
+            plt.close(fig) 
