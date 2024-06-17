@@ -1,6 +1,6 @@
 from hvac_data import get_hvac_data
 import sys
-import gym
+import gymnasium as gym
 from custom_envs import *
 import time
 from stable_baselines3 import DDPG
@@ -11,37 +11,36 @@ import numpy as np
 from joblib import load
 import os
 
+import warnings
+warnings.filterwarnings("ignore")
+
 
 data = get_hvac_data()
-ml_model = load('ml_models/Building01_LinearRegression.joblib')
-scaler_X = load('scalers/Building01_LinearRegression_Scaler_X.joblib')
-scaler_y = load('scalers/Building01_LinearRegression_Scaler_y.joblib')
-feature_order = load('feature_order/Building01_LinearRegression_Features.joblib')
-target_order = load('feature_order/Building01_LinearRegression_Targets.joblib')
+ml_model = load("simulation/Building01/lr_model.joblib")
+scaler_X = load("simulation/Building01/lr_scaler_X.joblib")
+scaler_y = load("simulation/Building01/lr_scaler_y.joblib")
 
+# env = gym.make('CustomEnv-v0')
+# env.pass_df(data)
+# env.pass_model_details(ml_model, scaler_X, scaler_y)
 
-env = gym.make('CustomEnv-v0')
-env.pass_df(data)
-env.pass_model_details(ml_model, scaler_X, scaler_y, feature_order, target_order)
-
-print(env.observation_space)
-print(env.action_space)
-print(env.spec)
-print(env.spec.max_episode_steps)
-print(env.spec.reward_threshold)
-
+# print(env.observation_space)
+# print(env.action_space)
+# print(env.spec)
+# print(env.spec.max_episode_steps)
+# print(env.spec.reward_threshold)
 
 # state = env.reset()
-# for _ in range(10):  
+# for _ in range(6000):  
 #     action = env.action_space.sample()  # Replace with your model's action
-#     next_state, reward, done, info = env.step(action)
+#     next_state, reward, _, done, info = env.step(action)
 #     env.render()
 #     if done:
 #         break
 
 env = gym.make('CustomEnv-v0')
 env.pass_df(data)
-env.pass_model_details(ml_model, scaler_X, scaler_y, feature_order, target_order)
+env.pass_model_details(ml_model, scaler_X, scaler_y)
 state = env.reset()
 
 n_actions = env.action_space.shape[-1]

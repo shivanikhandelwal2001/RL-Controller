@@ -2,27 +2,13 @@ import pandas as pd
 pd.set_option('display.max_columns', None)
 
 def get_hvac_data():
-    dataset = pd.read_pickle("Building01_Processed.pkl")
-    
-    # predictions = pd.read_csv("Building01_LinearRegression_predictions.csv")
-    # print(predictions.head())
-    # print(predictions.shape)
-    # print(predictions.columns)
+    dataset = pd.read_csv("simulation/Building01/data.csv", parse_dates=['Date'], index_col='Date')
+    simulation_start = '2014-12-01'
+    simulation_end = '2015-03-31'
 
-    # spaces_with_temp = set(col.split('_')[0] for col in data.columns if 'Air_temperature_pred' in col)
-    # spaces_with_humidity = set(col.split('_')[0] for col in data.columns if 'Relative_humidity_pred' in col)
+    sub_data = dataset[(dataset.index >= simulation_start) & (dataset.index <= simulation_end)]
+    print(sub_data.shape)
 
-    # # Finding spaces with both temperature and humidity data
-    # spaces_with_both = spaces_with_temp.intersection(spaces_with_humidity)
-
-    # # Filtering columns for those spaces
-    # filtered_columns = [col for col in data.columns if col.split('_')[0] in spaces_with_both]
-
-    # temp_columns = sorted([col for col in filtered_columns if 'Air_temperature_pred' in col])
-    # humidity_columns = sorted([col for col in filtered_columns if 'Relative_humidity_pred' in col])
-    # paired_columns = [val for pair in zip(temp_columns, humidity_columns) for val in pair]
-    # data1 = data[paired_columns]
-
-    return dataset
+    return sub_data
     
 get_hvac_data()
