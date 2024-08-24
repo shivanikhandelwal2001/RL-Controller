@@ -5,6 +5,6 @@ df = get_hvac_data()
 
 register(
     id="CustomEnv-v0",
-    entry_point="custom_envs.envs.custom_env:HVACEnv",
+    entry_point="datadrivenHVACEnv.envs.custom_env:HVACEnv",
     kwargs={"df": df},
 )
