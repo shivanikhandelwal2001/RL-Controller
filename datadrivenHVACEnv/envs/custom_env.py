@@ -1,44 +1,67 @@
 import gymnasium as gym
-from gymnasium import spaces
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from gymnasium import spaces
 from joblib import load
-import matplotlib.pyplot as plt
 
 from .test_and_plot import plot_predictions, plot_results
+
 
 class HVACEnv(gym.Env):
     """
     A simple HVAC control environment for reinforcement learning.
     """
+
     def __init__(self, df):
         super(HVACEnv, self).__init__()
         # Assuming the temperature ranges from 0 to 50 degrees Celsius and humidity from 0% to 100%
         self.df = df
-        
+
         self.beta = 0.1
         self.setpoint_temp = 22
         self.range_around = 2
-        self.setpoint_temp_range = list(range(self.setpoint_temp-self.range_around, self.setpoint_temp+self.range_around + 1))
+        self.setpoint_temp_range = list(
+            range(
+                self.setpoint_temp - self.range_around,
+                self.setpoint_temp + self.range_around + 1,
+            )
+        )
         self.ideal_humidity_lower = 40
         self.ideal_humidity_upper = 60
         self.render_episodes = False
-        
-        self.temp_columns = [col for col in df.columns if col.endswith("Air_temperature")]
-        self.humi_columns = [col for col in df.columns if col.endswith("Relative_humidity")]
-        
-        self.state_variables = [col for col in df.columns if (col.endswith("Air_temperature")) or col.endswith("Relative_humidity")]
-        self.control_variables = [col for col in df.columns if col not in self.state_variables + ["Gas_volume"]]
-        self.lagged_features = {"lags_1": [col for col in df.columns if col.endswith("_1")],
-                                "lags_2": [col for col in df.columns if col.endswith("_2")]}
-        
+
+        self.temp_columns = [
+            col for col in df.columns if col.endswith("Air_temperature")
+        ]
+        self.humi_columns = [
+            col for col in df.columns if col.endswith("Relative_humidity")
+        ]
+
+        self.state_variables = [
+            col
+            for col in df.columns
+            if (col.endswith("Air_temperature")) or col.endswith("Relative_humidity")
+        ]
+        self.control_variables = [
+            col
+            for col in df.columns
+            if col not in self.state_variables + ["Gas_volume"]
+        ]
+        self.lagged_features = {
+            "lags_1": [col for col in df.columns if col.endswith("_1")],
+            "lags_2": [col for col in df.columns if col.endswith("_2")],
+        }
+
         self.lags = 2
-        self.current_step = 0    
+        self.current_step = 0
         self.episode = 0
-        
-        self.actuals_df = pd.DataFrame(columns=self.state_variables+["Gas_volume"])
-        self.predictions_df = pd.DataFrame(columns=self.state_variables+["Gas_volume"])
-        
+
+        self.actuals_df = pd.DataFrame(columns=self.state_variables + ["Gas_volume"])
+        self.predictions_df = pd.DataFrame(
+            columns=self.state_variables + ["Gas_volume"]
+        )
+
         default_obs_bounds = {
             "Air_temperature": (0, 50),
             "Relative_humidity": (0, 100),
@@ -48,7 +71,7 @@ class HVACEnv(gym.Env):
             "Outside_air_temperature": (-30, 50),
             "Outside_relative_humidity": (0, 100),
         }
-        
+
         observations_dict = {}
         for col in self.control_variables:
             if "Air_temperature" in col:
@@ -67,153 +90,176 @@ class HVACEnv(gym.Env):
                 obs_type = "Outside_relative_humidity"
             else:
                 continue
-            
-            observations_dict[col] = default_obs_bounds.get(obs_type, (0, 1))
-        
-        self.observations_vars = list(observations_dict.keys())
-        self.lower_obs_bounds = [observations_dict[obs][0] for obs in self.observations_vars]
-        self.upper_obs_bounds = [observations_dict[obs][1] for obs in self.observations_vars]
-                
-        self.action_space = spaces.Box(low=np.array([0]), high=np.array([1]), dtype=np.float32)
-        self.observation_space = spaces.Box(low  = np.array(self.lower_obs_bounds), 
-                                            high = np.array(self.upper_obs_bounds), 
-                                            dtype= np.float32)  
 
+            observations_dict[col] = default_obs_bounds.get(obs_type, (0, 1))
+
+        self.observations_vars = list(observations_dict.keys())
+        self.lower_obs_bounds = [
+            observations_dict[obs][0] for obs in self.observations_vars
+        ]
+        self.upper_obs_bounds = [
+            observations_dict[obs][1] for obs in self.observations_vars
+        ]
+
+        self.action_space = spaces.Box(
+            low=np.array([0]), high=np.array([1]), dtype=np.float32
+        )
+        self.observation_space = spaces.Box(
+            low=np.array(self.lower_obs_bounds),
+            high=np.array(self.upper_obs_bounds),
+            dtype=np.float32,
+        )
 
     def pass_model_details(self, ml_model, scaler_X, scaler_y, features_order):
         self.ml_model = ml_model
         self.scaler_X = scaler_X
         self.scaler_y = scaler_y
         self.features_order = features_order
-    
-    
+
     def advance(self, action):
         action_gas_volume = action[0]
-        
-        observations_df = pd.DataFrame([self.observations], columns=self.control_variables)
-        observations_df['Gas_volume'] = action_gas_volume
+
+        observations_df = pd.DataFrame(
+            [self.observations], columns=self.control_variables
+        )
+        observations_df["Gas_volume"] = action_gas_volume
         observations_df = observations_df[self.features_order]
-        
-        actual_next_state = self.df[self.state_variables+["Gas_volume"]].iloc[[self.current_step]]
-        
+
+        actual_next_state = self.df[self.state_variables + ["Gas_volume"]].iloc[
+            [self.current_step]
+        ]
+
         observations_df_scaled = self.scaler_X.transform(observations_df)
         next_state_scaled = self.ml_model.predict(observations_df_scaled)
-        
-        predicted_next_state = pd.DataFrame(self.scaler_y.inverse_transform(next_state_scaled), columns=self.state_variables)
+
+        predicted_next_state = pd.DataFrame(
+            self.scaler_y.inverse_transform(next_state_scaled),
+            columns=self.state_variables,
+        )
         predicted_next_state["Gas_volume"] = action_gas_volume
-        
-        self.actuals_df = pd.concat([self.actuals_df, actual_next_state], ignore_index=True)
-        self.predictions_df = pd.concat([self.predictions_df, predicted_next_state], ignore_index=True)
-            
+
+        self.actuals_df = pd.concat(
+            [self.actuals_df, actual_next_state], ignore_index=True
+        )
+        self.predictions_df = pd.concat(
+            [self.predictions_df, predicted_next_state], ignore_index=True
+        )
+
         return predicted_next_state
-    
-    
+
     def get_observations(self, res):
-        observations_df = pd.DataFrame([self.observations], columns=self.control_variables)
-        
+        observations_df = pd.DataFrame(
+            [self.observations], columns=self.control_variables
+        )
+
         for col in self.state_variables:
-            observations_df[col+"_2"] = observations_df[col+"_1"]
-            observations_df[col+"_1"] = res[col]
-            
+            observations_df[col + "_2"] = observations_df[col + "_1"]
+            observations_df[col + "_1"] = res[col]
+
         current_control_df = self.df[self.control_variables].iloc[self.current_step]
-        rem_cols = [col for col in self.control_variables if col not in self.lagged_features["lags_1"] + self.lagged_features["lags_2"]]
-        
+        rem_cols = [
+            col
+            for col in self.control_variables
+            if col
+            not in self.lagged_features["lags_1"] + self.lagged_features["lags_2"]
+        ]
+
         for col in rem_cols:
             observations_df[col] = current_control_df[col]
-        
-        # Reformat observations    
+
+        # Reformat observations
         observations = np.array(observations_df.values[0], dtype=np.float32)
-        
+
         return observations
-    
-    
+
     def normalize_discomfort(self, discomfort):
         min_val = np.min(discomfort)
         max_val = np.max(discomfort)
-        
-        if max_val == min_val: 
+
+        if max_val == min_val:
             return np.zeros_like(discomfort)
-        
+
         return (discomfort - min_val) / (max_val - min_val)
 
-        
     def get_reward(self, res):
         temp_values = res[self.temp_columns].values
         humi_values = res[self.humi_columns].values
-        
-        temp_discomfort = np.maximum(self.setpoint_temp_range[0] - temp_values, temp_values - self.setpoint_temp_range[1]) 
+
+        temp_discomfort = np.maximum(
+            self.setpoint_temp_range[0] - temp_values,
+            temp_values - self.setpoint_temp_range[1],
+        )
         temp_discomfort = np.maximum(temp_discomfort, 0) ** 2
-        
+
         humi_discomfort = np.maximum(40 - humi_values, humi_values - 60)
         humi_discomfort = np.maximum(humi_discomfort, 0) ** 2
-        
+
         temp_discomfort_normalized = self.normalize_discomfort(temp_discomfort)
         humi_discomfort_normalized = self.normalize_discomfort(humi_discomfort)
-        
-        discomfort = np.sum(temp_discomfort_normalized) + np.sum(humi_discomfort_normalized)
-        
-        cost = res['Gas_volume'].iloc[-1]
-        
-        reward = - self.beta * cost - (1 - self.beta) * discomfort
-        
+
+        discomfort = np.sum(temp_discomfort_normalized) + np.sum(
+            humi_discomfort_normalized
+        )
+
+        cost = res["Gas_volume"].iloc[-1]
+
+        reward = -self.beta * cost - (1 - self.beta) * discomfort
+
         return reward
-        
-    
+
     def compute_terminated(self):
         terminated = False
-        
+
         return terminated
-    
-    
+
     def compute_truncated(self):
-        truncated = bool(self.current_step >= len(self.df)-1)
-        
+        truncated = bool(self.current_step >= len(self.df) - 1)
+
         return truncated
 
-    
     def step(self, action):
         res = self.advance(action)
         self.current_step += 1
-        
+
         reward = self.get_reward(res)
         self.episode_rewards.append(reward)
-        
+
         terminated = self.compute_terminated()
         truncated = self.compute_truncated()
-        
+
         info = {
-        'info': 'Step at step {}'.format(self.current_step), 
+            "info": "Step at step {}".format(self.current_step),
         }
-        
+
         self.observations = self.get_observations(res)
-        
+
         if (terminated or truncated) and self.render_episodes:
             self.render()
-            
+
         return self.observations, reward, terminated, truncated, info
-    
-    
+
     def reset(self, **kwargs):
         # Reset the state of the environment to an initial state
         self.current_step = 0
         self.episode += 1
-        
+
         observations = self.df[self.control_variables].iloc[self.current_step].values
         self.observations = np.array(observations, dtype=np.float32)
 
-        self.actuals_df = pd.DataFrame(columns=self.state_variables+["Gas_volume"])
-        self.predictions_df = pd.DataFrame(columns=self.state_variables+["Gas_volume"])
-        
+        self.actuals_df = pd.DataFrame(columns=self.state_variables + ["Gas_volume"])
+        self.predictions_df = pd.DataFrame(
+            columns=self.state_variables + ["Gas_volume"]
+        )
+
         reset_info = {
-        'info': 'Reset at step 0', 
+            "info": "Reset at step 0",
         }
-        
+
         self.objective_integrand = 0
         self.episode_rewards = []
-        
+
         return self.observations, reset_info
-            
-    
-    def render(self, mode='episodes'):
+
+    def render(self, mode="episodes"):
         plot_predictions(self, self.episode, self.actuals_df, self.predictions_df)
         plot_results(self, self.episode, self.episode_rewards)
