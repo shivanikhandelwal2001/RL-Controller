@@ -64,15 +64,15 @@ eval_callback = EvalCallback(
     env,
     best_model_save_path="./ddpg_logs/best_model",
     log_path="./ddpg_logs/",
-    eval_freq=3000,
+    eval_freq=8000,
     deterministic=True,
     render=False,
 )
 checkpoint_callback = CheckpointCallback(
-    save_freq=10000, save_path="./ddpg_logs/", name_prefix="ddpg_checkpoint"
+    save_freq=20000, save_path="./ddpg_logs/", name_prefix="ddpg_checkpoint"
 )
 
-model.learn(total_timesteps=500000, callback=[eval_callback, checkpoint_callback])
+model.learn(total_timesteps=1000000, callback=[eval_callback, checkpoint_callback])
 
 model.save("ddpg_models/ddpg_hvac_control")
 del model
@@ -81,8 +81,6 @@ model = DDPG.load("ddpg_models/ddpg_hvac_control")
 
 mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=10)
 print(f"Mean reward: {mean_reward}, Std Reward: {std_reward}")
-
-env.plot_predictions()
 
 # state = env.reset()
 # done = True

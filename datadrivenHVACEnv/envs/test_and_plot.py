@@ -5,30 +5,32 @@ import pandas as pd
 
 
 def plot_predictions(env, episode, actuals_df, predictions_df, save_to_file=False):
-    if save_to_file:
-        actuals_df.to_csv(f"env_logs/actual_df_{episode}.csv")
-        predictions_df.to_csv(f"env_logs/predictions_df{episode}.csv")
+    
+    if episode%50==0:
+        if save_to_file:
+            actuals_df.to_csv(f"env_logs/episode_actual_data/actual_df_{episode}.csv", index=False)
+            predictions_df.to_csv(f"env_logs/episode_prediction_data/predictions_df{episode}.csv", index=False)
+        
+        for col in actuals_df.columns:
+            fig, ax = plt.subplots(figsize=(20, 15))
+            ax.plot(actuals_df.index, actuals_df[col], label="Actual", color="tab:blue")
+            ax.plot(
+                actuals_df.index,
+                predictions_df[col],
+                label="Predicted",
+                linestyle="--",
+                color="tab:orange",
+            )
+            ax.set_title(f"Actual vs Predicted Values for {col}")
+            ax.set_xlabel("Time Steps")
+            ax.set_ylabel("Values")
+            ax.legend()
 
-    for col in actuals_df.columns:
-        fig, ax = plt.subplots(figsize=(20, 15))
-        ax.plot(actuals_df.index, actuals_df[col], label="Actual", color="tab:blue")
-        ax.plot(
-            actuals_df.index,
-            predictions_df[col],
-            label="Predicted",
-            linestyle="--",
-            color="tab:orange",
-        )
-        ax.set_title(f"Actual vs Predicted Values for {col}")
-        ax.set_xlabel("Time Steps")
-        ax.set_ylabel("Values")
-        ax.legend()
+            dir_path = f"env_logs/plots/{episode}_plots"
+            os.makedirs(dir_path, exist_ok=True)
 
-        dir_path = f"env_logs/plots/{episode}_plots"
-        os.makedirs(dir_path, exist_ok=True)
-
-        plt.savefig(f"{dir_path}/{col}.png")
-        plt.close(fig)
+            plt.savefig(f"{dir_path}/{col}.png")
+            plt.close(fig)
 
 
 def plot_results(env, episode, rewards):
