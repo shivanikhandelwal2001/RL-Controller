@@ -122,7 +122,7 @@ if __name__ == "__main__":
         model_save_path="ddpg_logs", model_save_freq=10000, verbose=2
     )
 
-    model.learn(total_timesteps=config["total_timesteps"], callback=[eval_callback])
+    model.learn(total_timesteps=config["total_timesteps"], callback=[eval_callback, wandb_callback])
 
     model.save("ddpg_models/ddpg_hvac_control")
     del model
