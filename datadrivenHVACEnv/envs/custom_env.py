@@ -223,6 +223,7 @@ class HVACEnv(gym.Env):
 
     def step(self, action):
         res = self.advance(action)
+        self.current_step += 1
 
         reward = self.get_reward(res)
         self.episode_rewards.append(reward)
@@ -234,7 +235,6 @@ class HVACEnv(gym.Env):
             "info": "Step at step {}".format(self.current_step),
         }
 
-        self.current_step += 1
         self.observations = self.get_observations(res)
 
         if (terminated or truncated) and self.render_episodes:
@@ -265,5 +265,7 @@ class HVACEnv(gym.Env):
         return self.observations, reset_info
 
     def render(self, mode="episodes"):
-        plot_predictions(self, self.episode, self.actuals_df, self.predictions_df, save_to_file=True)
+        plot_predictions(
+            self, self.episode, self.actuals_df, self.predictions_df, save_to_file=True
+        )
         plot_results(self, self.episode, self.episode_rewards)

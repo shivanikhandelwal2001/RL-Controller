@@ -1,3 +1,5 @@
 __pycache__/
 ddpg_logs/
 env_logs/
+wandb/
+.venv

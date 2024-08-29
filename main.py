@@ -1,7 +1,3 @@
-import os
-import sys
-import time
-
 import gymnasium as gym
 import numpy as np
 import torch
@@ -12,7 +8,9 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.noise import NormalActionNoise
 from stable_baselines3.ddpg.policies import MlpPolicy
+from wandb.integration.sb3 import WandbCallback
 
+import wandb
 from datadrivenHVACEnv import *
 from hvac_data import get_hvac_data
 
@@ -44,35 +42,60 @@ env = Monitor(env)
 env.unwrapped.pass_model_details(ml_model, scaler_X, scaler_y, features_order)
 state = env.reset()
 
+config = {
+    "learning_rate": 1e-3,
+    "batch_size": 64,
+    "total_timesteps": 1000000,
+    "policy": "MlpPolicy",
+    "action_noise_sigma": 0.1,
+    "device": "cuda",
+}
+
+wandb.init(
+    project="HVAC-Control",
+    entity="shivani_2001",
+    config=config,
+    id="123",
+    name="V1",
+    resume="allow",
+    sync_tensorboard=True,
+)
+
 n_actions = env.action_space.shape[-1]
 action_noise = NormalActionNoise(
-    mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions)
+    mean=np.zeros(n_actions), sigma=config["action_noise_sigma"] * np.ones(n_actions)
 )
 
 model = DDPG(
-    MlpPolicy,
+    config["policy"],
     env,
     action_noise=action_noise,
     verbose=1,
-    tensorboard_log="./ddpg_logs/",
-    device="cuda",
-    learning_rate=1e-5,
-    batch_size=128,
+    tensorboard_log="ddpg_logs",
+    device=config["device"],
+    learning_rate=config["learning_rate"],
+    batch_size=config["batch_size"],
 )
 
 eval_callback = EvalCallback(
     env,
-    best_model_save_path="./ddpg_logs/best_model",
-    log_path="./ddpg_logs/",
-    eval_freq=8000,
+    best_model_save_path="ddpg_logs/best_model",
+    log_path="ddpg_logs",
+    eval_freq=5000,
     deterministic=True,
     render=False,
 )
 checkpoint_callback = CheckpointCallback(
-    save_freq=20000, save_path="./ddpg_logs/", name_prefix="ddpg_checkpoint"
+    save_freq=10000, save_path="ddpg_logs", name_prefix="ddpg_checkpoint"
 )
 
-model.learn(total_timesteps=1000000, callback=[eval_callback, checkpoint_callback])
+wandb_callback = WandbCallback(
+    model_save_path="ddpg_logs", model_save_freq=10000, verbose=2
+)
+
+model.learn(
+    total_timesteps=config["total_timesteps"], callback=[eval_callback, wandb_callback]
+)
 
 model.save("ddpg_models/ddpg_hvac_control")
 del model
@@ -81,6 +104,9 @@ model = DDPG.load("ddpg_models/ddpg_hvac_control")
 
 mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=10)
 print(f"Mean reward: {mean_reward}, Std Reward: {std_reward}")
+
+wandb.log({"mean_reward": mean_reward, "std_reward": std_reward})
+wandb.finish()
 
 # state = env.reset()
 # done = True
