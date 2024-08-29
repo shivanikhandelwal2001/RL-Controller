@@ -76,10 +76,10 @@ if __name__ == "__main__":
     )
 
     wandb.init(
-        project="HVAC-Control",
+        project="RL-Controller",
         entity="shivani_2001",
         config=config,
-        id="123",
+        id="shi1",
         name="V1",
         resume="allow",
         sync_tensorboard=True,

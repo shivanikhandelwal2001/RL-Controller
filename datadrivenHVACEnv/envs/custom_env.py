@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from gymnasium import spaces
 from gymnasium.utils import seeding
+from sklearn.preprocessing import MinMaxScaler
 
 from .test_and_plot import plot_predictions, plot_results
 
@@ -16,6 +17,7 @@ class HVACEnv(gym.Env):
         super(HVACEnv, self).__init__()
         # Assuming the temperature ranges from 0 to 50 degrees Celsius and humidity from 0% to 100%
         self.df = df
+        self.scaler = MinMaxScaler()
 
         self.beta = 0.4
         self.setpoint_temp = 21
@@ -52,6 +54,8 @@ class HVACEnv(gym.Env):
             "lags_1": [col for col in df.columns if col.endswith("_1")],
             "lags_2": [col for col in df.columns if col.endswith("_2")],
         }
+        
+        self.scaler.fit(self.df[self.control_variables])
 
         self.lags = 2
         self.current_step = 0
@@ -125,15 +129,11 @@ class HVACEnv(gym.Env):
     def advance(self, action):
         action_gas_volume = action[0]
 
-        observations_df = pd.DataFrame(
-            [self.observations], columns=self.control_variables
-        )
+        observations_df = self.observations.copy()
         observations_df["Gas_volume"] = action_gas_volume
         observations_df = observations_df[self.features_order]
 
-        actual_next_state = self.df.iloc[self.current_step][
-            self.state_variables + self.action_variables
-        ].values
+        actual_next_state = self.df.loc[self.current_step, self.state_variables + self.action_variables].values
 
         observations_df_scaled = self.scaler_X.transform(observations_df)
         next_state_scaled = self.ml_model.predict(observations_df_scaled)
@@ -150,33 +150,24 @@ class HVACEnv(gym.Env):
         return predicted_next_state
 
     def get_observations(self, res):
-        observations_df = pd.DataFrame(
-            [self.observations], columns=self.control_variables
-        )
-        current_control_df = self.df.iloc[self.current_step][self.control_variables]
+        current_control_df = self.df.loc[self.current_step, self.control_variables]
+        
+        if not hasattr(self, 'observations'):
+            self.observations = pd.DataFrame([current_control_df])
 
         if self.current_step % 48 == 0:
-            for col in self.control_variables:
-                observations_df[col] = current_control_df[col]
+            self.observations.loc[0, self.control_variables] = current_control_df.values
         else:
-            for col in self.state_variables:
-                observations_df[col + "_2"] = observations_df[col + "_1"]
-                observations_df[col + "_1"] = res[col]
+            self.observations.loc[0, [col + "_2" for col in self.state_variables]] = self.observations.loc[0, [col + "_1" for col in self.state_variables]].values
+            self.observations.loc[0, [col + "_1" for col in self.state_variables]] = res[self.state_variables].values
 
-            rem_cols = [
-                col
-                for col in self.control_variables
-                if col
-                not in self.lagged_features["lags_1"] + self.lagged_features["lags_2"]
-            ]
+            rem_cols = [col for col in self.control_variables if col not in self.lagged_features["lags_1"] + self.lagged_features["lags_2"]]
+            self.observations.loc[0, rem_cols] = current_control_df[rem_cols].values
+        
+        observations = self.observations.values.astype(np.float32)
+        observations_norm = self.scaler.transform(observations)[0]
 
-            for col in rem_cols:
-                observations_df[col] = current_control_df[col]
-
-        # Reformat observations
-        observations = np.array(observations_df.values[0], dtype=np.float32)
-
-        return observations
+        return observations_norm
 
     def normalize_discomfort(self, discomfort):
         min_val = np.min(discomfort)
@@ -237,20 +228,22 @@ class HVACEnv(gym.Env):
             "info": "Step at step {}".format(self.current_step),
         }
 
-        self.observations = self.get_observations(res)
+        observations_norm = self.get_observations(res)
 
         if (terminated or truncated) and self.render_episodes:
             self.render()
 
-        return self.observations, reward, terminated, truncated, info
+        return observations_norm, reward, terminated, truncated, info
 
     def reset(self, **kwargs):
         # Reset the state of the environment to an initial state
         self.current_step = 0
         self.episode += 1
 
-        observations = self.df.iloc[self.current_step][self.control_variables].values
-        self.observations = np.array(observations, dtype=np.float32)
+        self.observations = self.df.loc[[self.current_step], self.control_variables]
+        
+        observations = self.observations.values.astype(np.float32)
+        observations_norm = self.scaler.transform(observations)[0]
 
         self.actuals = []
         self.predictions = []
@@ -262,7 +255,7 @@ class HVACEnv(gym.Env):
         self.objective_integrand = 0
         self.episode_rewards = []
 
-        return self.observations, reset_info
+        return observations_norm, reset_info
 
     def render(self, mode="episodes"):
         if self.episode % 50 == 0:
