@@ -1,9 +1,8 @@
 import gymnasium as gym
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from gymnasium import spaces
-from joblib import load
+from gymnasium.utils import seeding
 
 from .test_and_plot import plot_predictions, plot_results
 
@@ -27,7 +26,7 @@ class HVACEnv(gym.Env):
                 self.setpoint_temp + self.range_around + 1,
             )
         )
-        self.ideal_humidity_lower = 45
+        self.ideal_humidity_lower = 40
         self.ideal_humidity_upper = 60
         self.render_episodes = True
 
@@ -38,6 +37,7 @@ class HVACEnv(gym.Env):
             col for col in df.columns if col.endswith("Relative_humidity")
         ]
 
+        self.action_variables = ["Gas_volume"]
         self.state_variables = [
             col
             for col in df.columns
@@ -46,7 +46,7 @@ class HVACEnv(gym.Env):
         self.control_variables = [
             col
             for col in df.columns
-            if col not in self.state_variables + ["Gas_volume"]
+            if col not in self.state_variables + self.action_variables
         ]
         self.lagged_features = {
             "lags_1": [col for col in df.columns if col.endswith("_1")],
@@ -57,9 +57,11 @@ class HVACEnv(gym.Env):
         self.current_step = 0
         self.episode = 0
 
-        self.actuals_df = pd.DataFrame(columns=self.state_variables + ["Gas_volume"])
+        self.actuals_df = pd.DataFrame(
+            columns=self.state_variables + self.action_variables
+        )
         self.predictions_df = pd.DataFrame(
-            columns=self.state_variables + ["Gas_volume"]
+            columns=self.state_variables + self.action_variables
         )
 
         default_obs_bounds = {
@@ -116,6 +118,10 @@ class HVACEnv(gym.Env):
         self.scaler_y = scaler_y
         self.features_order = features_order
 
+    def seed(self, seed=None):
+        self.np_random, seed = seeding.np_random(seed)
+        return [seed]
+
     def advance(self, action):
         action_gas_volume = action[0]
 
@@ -125,9 +131,9 @@ class HVACEnv(gym.Env):
         observations_df["Gas_volume"] = action_gas_volume
         observations_df = observations_df[self.features_order]
 
-        actual_next_state = self.df[self.state_variables + ["Gas_volume"]].iloc[
-            [self.current_step]
-        ]
+        actual_next_state = self.df.iloc[self.current_step][
+            self.state_variables + self.action_variables
+        ].values
 
         observations_df_scaled = self.scaler_X.transform(observations_df)
         next_state_scaled = self.ml_model.predict(observations_df_scaled)
@@ -138,12 +144,8 @@ class HVACEnv(gym.Env):
         )
         predicted_next_state["Gas_volume"] = action_gas_volume
 
-        self.actuals_df = pd.concat(
-            [self.actuals_df, actual_next_state], ignore_index=True
-        )
-        self.predictions_df = pd.concat(
-            [self.predictions_df, predicted_next_state], ignore_index=True
-        )
+        self.actuals.append(actual_next_state)
+        self.predictions.append(predicted_next_state.iloc[0].values)
 
         return predicted_next_state
 
@@ -151,7 +153,7 @@ class HVACEnv(gym.Env):
         observations_df = pd.DataFrame(
             [self.observations], columns=self.control_variables
         )
-        current_control_df = self.df[self.control_variables].iloc[self.current_step]
+        current_control_df = self.df.iloc[self.current_step][self.control_variables]
 
         if self.current_step % 48 == 0:
             for col in self.control_variables:
@@ -247,16 +249,14 @@ class HVACEnv(gym.Env):
         self.current_step = 0
         self.episode += 1
 
-        observations = self.df[self.control_variables].iloc[self.current_step].values
+        observations = self.df.iloc[self.current_step][self.control_variables].values
         self.observations = np.array(observations, dtype=np.float32)
 
-        self.actuals_df = pd.DataFrame(columns=self.state_variables + ["Gas_volume"])
-        self.predictions_df = pd.DataFrame(
-            columns=self.state_variables + ["Gas_volume"]
-        )
+        self.actuals = []
+        self.predictions = []
 
         reset_info = {
-            "info": "Reset at step 0",
+            "info": f"Reset at step {self.current_step}",
         }
 
         self.objective_integrand = 0
@@ -265,7 +265,14 @@ class HVACEnv(gym.Env):
         return self.observations, reset_info
 
     def render(self, mode="episodes"):
-        plot_predictions(
-            self, self.episode, self.actuals_df, self.predictions_df, save_to_file=True
-        )
+        if self.episode % 50 == 0:
+            plot_predictions(
+                self,
+                self.episode,
+                self.actuals,
+                self.predictions,
+                self.state_variables,
+                self.action_variables,
+                save_to_file=True,
+            )
         plot_results(self, self.episode, self.episode_rewards)
