@@ -11,7 +11,7 @@ def get_hvac_data():
     sub_data = dataset[
         (dataset.index >= simulation_start) & (dataset.index <= simulation_end)
     ]
-    
+
     sub_data.reset_index(inplace=True, drop=True)
     print(sub_data.shape)
 

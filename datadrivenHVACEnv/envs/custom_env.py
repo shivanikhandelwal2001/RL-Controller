@@ -54,7 +54,7 @@ class HVACEnv(gym.Env):
             "lags_1": [col for col in df.columns if col.endswith("_1")],
             "lags_2": [col for col in df.columns if col.endswith("_2")],
         }
-        
+
         self.scaler.fit(self.df[self.control_variables])
 
         self.lags = 2
@@ -108,12 +108,12 @@ class HVACEnv(gym.Env):
         ]
 
         self.action_space = spaces.Box(
-            low=np.array([0]), high=np.array([1]), dtype=np.float32
+            low=np.array([0]), high=np.array([1]), dtype=np.float64
         )
         self.observation_space = spaces.Box(
             low=np.array(self.lower_obs_bounds),
             high=np.array(self.upper_obs_bounds),
-            dtype=np.float32,
+            dtype=np.float64,
         )
 
     def pass_model_details(self, ml_model, scaler_X, scaler_y, features_order):
@@ -133,7 +133,9 @@ class HVACEnv(gym.Env):
         observations_df["Gas_volume"] = action_gas_volume
         observations_df = observations_df[self.features_order]
 
-        actual_next_state = self.df.loc[self.current_step, self.state_variables + self.action_variables].values
+        actual_next_state = self.df.loc[
+            self.current_step, self.state_variables + self.action_variables
+        ].values
 
         observations_df_scaled = self.scaler_X.transform(observations_df)
         next_state_scaled = self.ml_model.predict(observations_df_scaled)
@@ -151,20 +153,31 @@ class HVACEnv(gym.Env):
 
     def get_observations(self, res):
         current_control_df = self.df.loc[self.current_step, self.control_variables]
-        
-        if not hasattr(self, 'observations'):
+
+        if not hasattr(self, "observations"):
             self.observations = pd.DataFrame([current_control_df])
 
         if self.current_step % 48 == 0:
             self.observations.loc[0, self.control_variables] = current_control_df.values
         else:
-            self.observations.loc[0, [col + "_2" for col in self.state_variables]] = self.observations.loc[0, [col + "_1" for col in self.state_variables]].values
-            self.observations.loc[0, [col + "_1" for col in self.state_variables]] = res[self.state_variables].values
+            self.observations.loc[
+                0, [col + "_2" for col in self.state_variables]
+            ] = self.observations.loc[
+                0, [col + "_1" for col in self.state_variables]
+            ].values
+            self.observations.loc[
+                0, [col + "_1" for col in self.state_variables]
+            ] = res[self.state_variables].values
 
-            rem_cols = [col for col in self.control_variables if col not in self.lagged_features["lags_1"] + self.lagged_features["lags_2"]]
+            rem_cols = [
+                col
+                for col in self.control_variables
+                if col
+                not in self.lagged_features["lags_1"] + self.lagged_features["lags_2"]
+            ]
             self.observations.loc[0, rem_cols] = current_control_df[rem_cols].values
-        
-        observations = self.observations.values.astype(np.float32)
+
+        observations = self.observations.values.astype(np.float64)
         observations_norm = self.scaler.transform(observations)[0]
 
         return observations_norm
@@ -240,9 +253,11 @@ class HVACEnv(gym.Env):
         self.current_step = 0
         self.episode += 1
 
-        self.observations = self.df.loc[[self.current_step], self.control_variables]
-        
-        observations = self.observations.values.astype(np.float32)
+        self.observations = self.df.loc[
+            [self.current_step], self.control_variables
+        ].astype(np.float64)
+
+        observations = self.observations.values.astype(np.float64)
         observations_norm = self.scaler.transform(observations)[0]
 
         self.actuals = []

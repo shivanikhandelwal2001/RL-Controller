@@ -1,3 +1,5 @@
+import warnings
+
 import gymnasium as gym
 import numpy as np
 import torch
@@ -6,14 +8,21 @@ from stable_baselines3 import DDPG
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.noise import (NormalActionNoise,
-                                            OrnsteinUhlenbeckActionNoise)
+from stable_baselines3.common.noise import (
+    NormalActionNoise,
+    OrnsteinUhlenbeckActionNoise,
+)
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from wandb.integration.sb3 import WandbCallback
 
 import wandb
 from datadrivenHVACEnv import *
 from hvac_data import get_hvac_data
+
+warnings.filterwarnings(
+    "ignore",
+    message="X does not have valid feature names, but MinMaxScaler was fitted with feature names",
+)
 
 print(torch.cuda.is_available())
 
@@ -79,8 +88,8 @@ if __name__ == "__main__":
         project="RL-Controller",
         entity="shivani_2001",
         config=config,
-        id="shi3",
-        name="V3",
+        id="shi4",
+        name="V4",
         resume="allow",
         sync_tensorboard=True,
     )
@@ -122,7 +131,10 @@ if __name__ == "__main__":
         model_save_path="ddpg_logs", model_save_freq=10000, verbose=2
     )
 
-    model.learn(total_timesteps=config["total_timesteps"], callback=[eval_callback, wandb_callback])
+    model.learn(
+        total_timesteps=config["total_timesteps"],
+        callback=[eval_callback, wandb_callback],
+    )
 
     model.save("ddpg_models/ddpg_hvac_control")
     del model
