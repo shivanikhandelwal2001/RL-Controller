@@ -19,7 +19,7 @@ class HVACEnv(gym.Env):
         self.df = df
         self.scaler = MinMaxScaler()
 
-        self.beta = 0.4
+        self.beta = 0.3
         self.setpoint_temp = 21
         self.range_around = 2
         self.setpoint_temp_range = list(

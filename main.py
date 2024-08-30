@@ -3,6 +3,7 @@ import warnings
 import gymnasium as gym
 import numpy as np
 import torch
+from torch.optim.lr_scheduler import StepLR
 from joblib import load
 from stable_baselines3 import DDPG
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
@@ -28,12 +29,14 @@ print(torch.cuda.is_available())
 
 
 config = {
-    "learning_rate": 1e-4,
-    "batch_size": 64,
+    "learning_rate": 1e-3,
+    "batch_size": 32,
     "total_timesteps": 10000000,
     "policy": "MlpPolicy",
     "action_noise_sigma": 0.1,
     "device": "cuda",
+    "step_size": 1000, 
+    "gamma": 0.9,
 }
 
 data = get_hvac_data()
@@ -45,7 +48,7 @@ features_order = load(
 )
 
 env_id = "CustomEnv-v0"
-num_envs = 25
+num_envs = 10
 
 
 # env = gym.make('CustomEnv-v0')
@@ -85,7 +88,7 @@ if __name__ == "__main__":
     )
 
     wandb.init(
-        project="RL-Controller",
+        project="RL-Controller2",
         entity="shivani_2001",
         config=config,
         id="shi4",
@@ -107,13 +110,21 @@ if __name__ == "__main__":
     model = DDPG(
         config["policy"],
         env,
-        action_noise=action_noise,
+        action_noise=ou_noise,
         verbose=1,
         tensorboard_log="ddpg_logs",
         device=config["device"],
         learning_rate=config["learning_rate"],
         batch_size=config["batch_size"],
     )
+    
+    # Get the optimizers from the model
+    actor_optimizer = model.actor.optimizer
+    critic_optimizer = model.critic.optimizer
+
+    # Initialize the learning rate schedulers
+    actor_scheduler = StepLR(actor_optimizer, step_size=config["step_size"], gamma=config["gamma"])
+    critic_scheduler = StepLR(critic_optimizer, step_size=config["step_size"], gamma=config["gamma"])
 
     eval_callback = EvalCallback(
         env,
@@ -131,10 +142,15 @@ if __name__ == "__main__":
         model_save_path="ddpg_logs", model_save_freq=10000, verbose=2
     )
 
-    model.learn(
-        total_timesteps=config["total_timesteps"],
-        callback=[eval_callback, wandb_callback],
-    )
+    for _ in range(int(config["total_timesteps"] // config["step_size"])):
+        model.learn(
+            total_timesteps=config["step_size"],
+            callback=[eval_callback, wandb_callback],
+        )
+        
+        # Step the scheduler after every interval
+        actor_scheduler.step()
+        critic_scheduler.step()
 
     model.save("ddpg_models/ddpg_hvac_control")
     del model
