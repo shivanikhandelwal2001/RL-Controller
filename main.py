@@ -79,8 +79,8 @@ if __name__ == "__main__":
         project="RL-Controller",
         entity="shivani_2001",
         config=config,
-        id="shi1",
-        name="V1",
+        id="shi3",
+        name="V3",
         resume="allow",
         sync_tensorboard=True,
     )

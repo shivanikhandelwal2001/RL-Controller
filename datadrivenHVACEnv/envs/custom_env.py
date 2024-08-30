@@ -258,7 +258,7 @@ class HVACEnv(gym.Env):
         return observations_norm, reset_info
 
     def render(self, mode="episodes"):
-        if self.episode % 50 == 0:
+        if self.episode % 10 == 0:
             plot_predictions(
                 self,
                 self.episode,
