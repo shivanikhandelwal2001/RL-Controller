@@ -3,7 +3,6 @@ import warnings
 import gymnasium as gym
 import numpy as np
 import torch
-from torch.optim.lr_scheduler import StepLR
 from joblib import load
 from stable_baselines3 import DDPG
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
@@ -35,16 +34,14 @@ config = {
     "policy": "MlpPolicy",
     "action_noise_sigma": 0.1,
     "device": "cuda",
-    "step_size": 1000, 
-    "gamma": 0.9,
 }
 
 data = get_hvac_data()
-ml_model = load("simulation/BuildingA/Building01_linear_regression.joblib")
-scaler_X = load("simulation/BuildingA/Building01_linear_regression_scaler_X.joblib")
-scaler_y = load("simulation/BuildingA/Building01_linear_regression_scaler_y.joblib")
+ml_model = load("simulation/BuildingB/Building08_linear_regression.joblib")
+scaler_X = load("simulation/BuildingB/Building08_linear_regression_scaler_X.joblib")
+scaler_y = load("simulation/BuildingB/Building08_linear_regression_scaler_y.joblib")
 features_order = load(
-    "simulation/BuildingA/Building01_linear_regression_features.joblib"
+    "simulation/BuildingB/Building08_linear_regression_features.joblib"
 )
 
 env_id = "CustomEnv-v0"
@@ -88,7 +85,7 @@ if __name__ == "__main__":
     )
 
     wandb.init(
-        project="RL-Controller2",
+        project="RL-Controller3",
         entity="shivani_2001",
         config=config,
         id="shi4",
@@ -110,21 +107,13 @@ if __name__ == "__main__":
     model = DDPG(
         config["policy"],
         env,
-        action_noise=ou_noise,
+        action_noise=action_noise,
         verbose=1,
         tensorboard_log="ddpg_logs",
         device=config["device"],
         learning_rate=config["learning_rate"],
         batch_size=config["batch_size"],
     )
-    
-    # Get the optimizers from the model
-    actor_optimizer = model.actor.optimizer
-    critic_optimizer = model.critic.optimizer
-
-    # Initialize the learning rate schedulers
-    actor_scheduler = StepLR(actor_optimizer, step_size=config["step_size"], gamma=config["gamma"])
-    critic_scheduler = StepLR(critic_optimizer, step_size=config["step_size"], gamma=config["gamma"])
 
     eval_callback = EvalCallback(
         env,
@@ -142,15 +131,10 @@ if __name__ == "__main__":
         model_save_path="ddpg_logs", model_save_freq=10000, verbose=2
     )
 
-    for _ in range(int(config["total_timesteps"] // config["step_size"])):
-        model.learn(
-            total_timesteps=config["step_size"],
-            callback=[eval_callback, wandb_callback],
-        )
-        
-        # Step the scheduler after every interval
-        actor_scheduler.step()
-        critic_scheduler.step()
+    model.learn(
+        total_timesteps=config["total_timesteps"],
+        callback=[eval_callback, wandb_callback],
+    )
 
     model.save("ddpg_models/ddpg_hvac_control")
     del model
