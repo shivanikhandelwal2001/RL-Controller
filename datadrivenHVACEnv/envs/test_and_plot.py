@@ -17,13 +17,22 @@ def plot_predictions(
     predictions_df = pd.DataFrame(
         predictions, columns=state_variables + action_variables
     )
+    
+    save_actual_dir = "env_logs3/episode_actual_data"
+    os.makedirs(save_actual_dir, exist_ok=True)
+    
+    save_prediction_dir = "env_logs3/episode_prediction_data"
+    os.makedirs(save_prediction_dir, exist_ok=True)
+    
+    dir_path = f"env_logs3/plots/{episode}_plots"
+    os.makedirs(dir_path, exist_ok=True)
 
     if save_to_file:
         actuals_df.to_csv(
-            f"env_logs/episode_actual_data/actual_df_{episode}.csv", index=False
+            f"{save_actual_dir}/actual_df_{episode}.csv", index=False
         )
         predictions_df.to_csv(
-            f"env_logs/episode_prediction_data/predictions_df{episode}.csv", index=False
+            f"{save_prediction_dir}/predictions_df{episode}.csv", index=False
         )
 
         for col in actuals_df.columns:
@@ -40,9 +49,6 @@ def plot_predictions(
             ax.set_xlabel("Time Steps")
             ax.set_ylabel("Values")
             ax.legend()
-
-            dir_path = f"env_logs/plots/{episode}_plots"
-            os.makedirs(dir_path, exist_ok=True)
 
             plt.savefig(f"{dir_path}/{col}.png")
             plt.close(fig)

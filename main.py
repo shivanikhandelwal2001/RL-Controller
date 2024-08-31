@@ -1,3 +1,4 @@
+import os
 import warnings
 
 import gymnasium as gym
@@ -30,7 +31,7 @@ print(torch.cuda.is_available())
 config = {
     "learning_rate": 1e-3,
     "batch_size": 32,
-    "total_timesteps": 10000000,
+    "total_timesteps": 5000000,
     "policy": "MlpPolicy",
     "action_noise_sigma": 0.1,
     "device": "cuda",
@@ -47,6 +48,11 @@ features_order = load(
 env_id = "CustomEnv-v0"
 num_envs = 10
 
+log_dir = "ddpg_logs1"
+model_dir = "ddpg_models1"
+
+os.makedirs(log_dir, exist_ok=True)
+os.makedirs(model_dir, exist_ok=True)
 
 # env = gym.make('CustomEnv-v0')
 # env.pass_df(data)
@@ -109,7 +115,7 @@ if __name__ == "__main__":
         env,
         action_noise=action_noise,
         verbose=1,
-        tensorboard_log="ddpg_logs",
+        tensorboard_log=log_dir,
         device=config["device"],
         learning_rate=config["learning_rate"],
         batch_size=config["batch_size"],
@@ -117,18 +123,18 @@ if __name__ == "__main__":
 
     eval_callback = EvalCallback(
         env,
-        best_model_save_path="ddpg_logs/best_model",
-        log_path="ddpg_logs",
+        best_model_save_path=f"{log_dir}/best_model",
+        log_path=log_dir,
         eval_freq=5000,
         deterministic=True,
         render=False,
     )
     checkpoint_callback = CheckpointCallback(
-        save_freq=10000, save_path="ddpg_logs", name_prefix="ddpg_checkpoint"
+        save_freq=10000, save_path=log_dir, name_prefix="ddpg_checkpoint"
     )
 
     wandb_callback = WandbCallback(
-        model_save_path="ddpg_logs", model_save_freq=10000, verbose=2
+        model_save_path=log_dir, model_save_freq=10000, verbose=2
     )
 
     model.learn(
@@ -136,10 +142,10 @@ if __name__ == "__main__":
         callback=[eval_callback, wandb_callback],
     )
 
-    model.save("ddpg_models/ddpg_hvac_control")
+    model.save(f"{model_dir}/ddpg_hvac_control")
     del model
 
-    model = DDPG.load("ddpg_models/ddpg_hvac_control")
+    model = DDPG.load(f"{model_dir}/ddpg_hvac_control")
 
     mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=10)
     print(f"Mean reward: {mean_reward}, Std Reward: {std_reward}")
