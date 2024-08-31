@@ -37,7 +37,6 @@ config = {
     "device": "cuda",
 }
 
-data = get_hvac_data()
 ml_model = load("simulation/BuildingB/Building08_linear_regression.joblib")
 scaler_X = load("simulation/BuildingB/Building08_linear_regression_scaler_X.joblib")
 scaler_y = load("simulation/BuildingB/Building08_linear_regression_scaler_y.joblib")
@@ -94,9 +93,8 @@ if __name__ == "__main__":
         project="RL-Controller3",
         entity="shivani_2001",
         config=config,
-        id="shi4",
-        name="V4",
-        resume="allow",
+        id="shi5",
+        name="V5",
         sync_tensorboard=True,
     )
 

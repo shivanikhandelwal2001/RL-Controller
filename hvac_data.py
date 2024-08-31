@@ -3,8 +3,8 @@ import pandas as pd
 pd.set_option("display.max_columns", None)
 
 
-def get_hvac_data():
-    dataset = pd.read_pickle("simulation/BuildingA/Building01_Processed.pkl")
+def get_hvac_data(file_path="simulation/BuildingA/Building01_Processed.pkl"):
+    dataset = pd.read_pickle(file_path)
     simulation_start = "2014-12-01"
     simulation_end = "2015-03-31"
 

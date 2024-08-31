@@ -2,7 +2,7 @@ from gymnasium.envs.registration import register
 
 from hvac_data import get_hvac_data
 
-df = get_hvac_data()
+df = get_hvac_data(file_path="simulation/BuildingB/Building08_Processed.pkl")
 
 register(
     id="CustomEnv-v0",
