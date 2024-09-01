@@ -29,8 +29,8 @@ print(torch.cuda.is_available())
 
 
 config = {
-    "learning_rate": 1e-3,
-    "batch_size": 32,
+    "learning_rate": 1e-4,
+    "batch_size": 64,
     "total_timesteps": 5000000,
     "policy": "MlpPolicy",
     "action_noise_sigma": 0.1,
@@ -47,8 +47,8 @@ features_order = load(
 env_id = "CustomEnv-v0"
 num_envs = 10
 
-log_dir = "ddpg_logs1"
-model_dir = "ddpg_models1"
+log_dir = "ddpg_logs1_1"
+model_dir = "ddpg_models1_1"
 
 os.makedirs(log_dir, exist_ok=True)
 os.makedirs(model_dir, exist_ok=True)
@@ -93,8 +93,8 @@ if __name__ == "__main__":
         project="RL-Controller3",
         entity="shivani_2001",
         config=config,
-        id="shi5",
-        name="V5",
+        id="shi6",
+        name="V6",
         sync_tensorboard=True,
     )
 
@@ -105,7 +105,7 @@ if __name__ == "__main__":
     )
 
     ou_noise = OrnsteinUhlenbeckActionNoise(
-        mean=np.zeros(n_actions), sigma=0.2 * np.ones(n_actions), theta=0.15
+        mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions), theta=0.1
     )
 
     model = DDPG(
@@ -117,6 +117,7 @@ if __name__ == "__main__":
         device=config["device"],
         learning_rate=config["learning_rate"],
         batch_size=config["batch_size"],
+        tau=0.001,
     )
 
     eval_callback = EvalCallback(

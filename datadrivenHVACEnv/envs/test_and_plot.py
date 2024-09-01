@@ -18,13 +18,13 @@ def plot_predictions(
         predictions, columns=state_variables + action_variables
     )
     
-    save_actual_dir = "env_logs3/episode_actual_data"
+    save_actual_dir = "env_logs3_1/episode_actual_data"
     os.makedirs(save_actual_dir, exist_ok=True)
     
-    save_prediction_dir = "env_logs3/episode_prediction_data"
+    save_prediction_dir = "env_logs3_1/episode_prediction_data"
     os.makedirs(save_prediction_dir, exist_ok=True)
     
-    dir_path = f"env_logs3/plots/{episode}_plots"
+    dir_path = f"env_logs3_1/plots/{episode}_plots"
     os.makedirs(dir_path, exist_ok=True)
 
     if save_to_file:

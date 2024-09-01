@@ -195,14 +195,11 @@ class HVACEnv(gym.Env):
         temp_values = res[self.temp_columns].values
         humi_values = res[self.humi_columns].values
 
-        temp_discomfort = np.maximum(
-            self.setpoint_temp_range[0] - temp_values,
-            temp_values - self.setpoint_temp_range[1],
-        )
-        temp_discomfort = np.maximum(temp_discomfort, 0) ** 2
+        temp_discomfort = temp_values - self.setpoint_temp
+        temp_discomfort = temp_discomfort ** 2
 
-        humi_discomfort = np.maximum(40 - humi_values, humi_values - 60)
-        humi_discomfort = np.maximum(humi_discomfort, 0) ** 2
+        humi_discomfort = humi_values - (self.ideal_humidity_lower + self.ideal_humidity_upper) / 2
+        humi_discomfort = humi_discomfort ** 2
 
         temp_discomfort_normalized = self.normalize_discomfort(temp_discomfort)
         humi_discomfort_normalized = self.normalize_discomfort(humi_discomfort)
@@ -210,10 +207,11 @@ class HVACEnv(gym.Env):
         discomfort = np.sum(temp_discomfort_normalized) + np.sum(
             humi_discomfort_normalized
         )
+        avg_discomfort = (np.mean(temp_discomfort_normalized) + np.mean(humi_discomfort_normalized)) / 2
 
         cost = res["Gas_volume"].iloc[-1]
 
-        reward = -self.beta * cost - (1 - self.beta) * discomfort
+        reward = -self.beta * cost - (1 - self.beta) * avg_discomfort
 
         return reward
 
