@@ -13,25 +13,26 @@ class HVACEnv(gym.Env):
     A simple HVAC control environment for reinforcement learning.
     """
 
-    def __init__(self, df, controller="rl"):
+    def __init__(self, 
+                 df=None, 
+                 n_days=28,
+                 beta=0.5,
+                 setpoint_temp=21,
+                 setpoint_humi=50,
+                 render_episodes=False,
+                 controller="rl"):
+        
         super(HVACEnv, self).__init__()
         # Assuming the temperature ranges from 0 to 50 degrees Celsius and humidity from 0% to 100%
         self.df = df
+        self.n_days = n_days
+        self.beta = beta
+        self.setpoint_temp = setpoint_temp
+        self.setpoint_humi = setpoint_humi
+        self.render_episodes = render_episodes
         self.controller = controller
+        
         self.scaler = MinMaxScaler()
-
-        self.beta = 0.5
-        self.setpoint_temp = 21
-        self.range_around = 2
-        self.setpoint_temp_range = list(
-            range(
-                self.setpoint_temp - self.range_around,
-                self.setpoint_temp + self.range_around + 1,
-            )
-        )
-        self.ideal_humidity_lower = 40
-        self.ideal_humidity_upper = 60
-        self.render_episodes = True
 
         self.temp_columns = [
             col for col in df.columns if col.endswith("Air_temperature")
@@ -57,10 +58,8 @@ class HVACEnv(gym.Env):
         }
 
         self.scaler.fit(self.df[self.control_variables])
-
-        self.lags = 2
-        self.current_step = 0
         self.episode = 0
+        self.episode_max = len(self.df)
 
         self.actuals_df = pd.DataFrame(
             columns=self.state_variables + self.action_variables
@@ -199,7 +198,7 @@ class HVACEnv(gym.Env):
         temp_discomfort = temp_values - self.setpoint_temp
         temp_discomfort = temp_discomfort ** 2
 
-        humi_discomfort = humi_values - (self.ideal_humidity_lower + self.ideal_humidity_upper) / 2
+        humi_discomfort = humi_values - self.setpoint_humi
         humi_discomfort = humi_discomfort ** 2
 
         temp_discomfort_normalized = self.normalize_discomfort(temp_discomfort)
@@ -222,7 +221,7 @@ class HVACEnv(gym.Env):
         return terminated
 
     def compute_truncated(self):
-        truncated = bool(self.current_step >= len(self.df) - 1)
+        truncated = bool(self.current_step >= self.end_step)
 
         return truncated
 
@@ -254,12 +253,13 @@ class HVACEnv(gym.Env):
 
     def reset(self, **kwargs):
         # Reset the state of the environment to an initial state
-        self.current_step = 0
+        self.current_step = np.random.randint(0, self.episode_max-(self.n_days*48))
+        self.end_step = np.random.randint(self.current_step+(self.n_days*48), self.episode_max)
         self.episode += 1
 
         self.observations = self.df.loc[
             [self.current_step], self.control_variables
-        ].astype(np.float64)
+        ].astype(np.float64).reset_index(drop=True)
 
         observations = self.observations.values.astype(np.float64)
         observations_norm = self.scaler.transform(observations)[0]

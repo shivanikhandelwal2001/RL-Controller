@@ -18,6 +18,7 @@ from wandb.integration.sb3 import WandbCallback
 
 import wandb
 from datadrivenHVACEnv import *
+from hvac_data import get_hvac_data
 
 warnings.filterwarnings(
     "ignore",
@@ -27,15 +28,7 @@ warnings.filterwarnings(
 print(torch.cuda.is_available())
 
 
-config = {
-    "learning_rate": 1e-4,
-    "batch_size": 32,
-    "total_timesteps": 10000000,
-    "policy": "MlpPolicy",
-    "action_noise_sigma": 0.1,
-    "device": "cuda",
-}
-
+df = get_hvac_data(file_path="simulation/BuildingB/Building08_Processed.pkl")
 ml_model = load("simulation/BuildingB/Building08_linear_regression.joblib")
 scaler_X = load("simulation/BuildingB/Building08_linear_regression_scaler_X.joblib")
 scaler_y = load("simulation/BuildingB/Building08_linear_regression_scaler_y.joblib")
@@ -51,6 +44,26 @@ model_dir = "ddpg_models"
 
 os.makedirs(log_dir, exist_ok=True)
 os.makedirs(model_dir, exist_ok=True)
+
+model_config = {
+    "learning_rate": 1e-4,
+    "batch_size": 32,
+    "total_timesteps": 5000000,
+    "policy": "MlpPolicy",
+    "action_noise_sigma": 0.4,
+    "action_noise_theta": 0.25,
+    "device": "cuda",
+}
+
+env_config = {
+    "df": df,
+    "n_days": 28,
+    "beta": 0.5,
+    "setpoint_temp": 21,
+    "setpoint_humi": 50,
+    "render_episodes": True,
+    "controller": "rl",
+}
 
 # env = gym.make('CustomEnv-v0')
 # env.pass_df(data)
@@ -77,7 +90,7 @@ def make_env(env_id, rank, ml_model, scaler_X, scaler_y, features_order, seed=0)
 
 
 if __name__ == "__main__":
-    # env = gym.make(env_id)
+    # env = gym.make(env_id, **env_config)
     # env = Monitor(env)
     # env.unwrapped.pass_model_details(ml_model, scaler_X, scaler_y, features_order)
 
@@ -89,34 +102,33 @@ if __name__ == "__main__":
     )
 
     wandb.init(
-        project="RL-Controller3",
+        project="RLC-BuildingB",
         entity="shivani_2001",
-        config=config,
-        id="shi10",
-        name="V10",
+        config=model_config,
+        id="shi",
+        name="V1",
         sync_tensorboard=True,
     )
 
     n_actions = env.action_space.shape[-1]
     action_noise = NormalActionNoise(
         mean=np.zeros(n_actions),
-        sigma=config["action_noise_sigma"] * np.ones(n_actions),
+        sigma=model_config["action_noise_sigma"] * np.ones(n_actions),
     )
 
     ou_noise = OrnsteinUhlenbeckActionNoise(
-        mean=np.zeros(n_actions), sigma=0.4 * np.ones(n_actions), theta=0.25
+        mean=np.zeros(n_actions), sigma=model_config["action_noise_sigma"] * np.ones(n_actions), theta=model_config["action_noise_theta"]
     )
 
     model = DDPG(
-        config["policy"],
+        model_config["policy"],
         env,
-        action_noise=action_noise,
+        action_noise=ou_noise,
         verbose=1,
         tensorboard_log=log_dir,
-        device=config["device"],
-        learning_rate=config["learning_rate"],
-        batch_size=config["batch_size"],
-        tau=0.001,
+        device=model_config["device"],
+        learning_rate=model_config["learning_rate"],
+        batch_size=model_config["batch_size"],
     )
 
     eval_callback = EvalCallback(
@@ -136,7 +148,7 @@ if __name__ == "__main__":
     )
 
     model.learn(
-        total_timesteps=config["total_timesteps"],
+        total_timesteps=model_config["total_timesteps"],
         callback=[eval_callback, wandb_callback],
     )
 
