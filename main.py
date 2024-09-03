@@ -78,9 +78,9 @@ env_config = {
 #         break
 
 
-def make_env(env_id, rank, ml_model, scaler_X, scaler_y, features_order, seed=0):
+def make_env(env_id, rank, seed=0):
     def _init():
-        env = gym.make(env_id)
+        env = gym.make(env_id, **env_config)
         env = Monitor(env)
         env.unwrapped.pass_model_details(ml_model, scaler_X, scaler_y, features_order)
         env.unwrapped.seed(seed + rank)  # Set different seed for each environment
@@ -96,7 +96,7 @@ if __name__ == "__main__":
 
     env = SubprocVecEnv(
         [
-            make_env(env_id, i, ml_model, scaler_X, scaler_y, features_order)
+            make_env(env_id, i)
             for i in range(num_envs)
         ]
     )
