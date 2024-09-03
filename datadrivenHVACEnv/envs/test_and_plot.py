@@ -1,6 +1,7 @@
 import os
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 
@@ -18,13 +19,13 @@ def plot_predictions(
         predictions, columns=state_variables + action_variables
     )
     
-    save_actual_dir = "env_logs3_1/episode_actual_data"
+    save_actual_dir = "env_logs/episode_actual_data"
     os.makedirs(save_actual_dir, exist_ok=True)
     
-    save_prediction_dir = "env_logs3_1/episode_prediction_data"
+    save_prediction_dir = "env_logs/episode_prediction_data"
     os.makedirs(save_prediction_dir, exist_ok=True)
     
-    dir_path = f"env_logs3_1/plots/{episode}_plots"
+    dir_path = f"env_logs/plots/{episode}_plots"
     os.makedirs(dir_path, exist_ok=True)
 
     if save_to_file:
@@ -56,3 +57,30 @@ def plot_predictions(
 
 def plot_results(env, episode, rewards):
     pass
+
+
+def plot_discomfort_function(setpoint=21, temp_range=(15, 27), title="Discomfort Function for Temperature Control"):
+    """
+    Plots the discomfort function for a given setpoint temperature.
+    """
+    
+    x = np.linspace(temp_range[0], temp_range[1], 100) 
+    
+    def discomfort(x):
+        return (x - setpoint) ** 2
+
+    y = discomfort(x)
+
+    plt.figure(figsize=(8, 6))
+    plt.plot(x, y, label=f'Discomfort = (x - {setpoint})^2', color='blue')
+    plt.axvline(x=setpoint, color='red', linestyle='--', label=f'Setpoint Temperature ({setpoint}°C)')
+    plt.axhline(y=0, color='black', linestyle='-')
+    plt.xlabel('Temperature (°C)')
+    plt.ylabel('Discomfort Level')
+    plt.title(title)
+    plt.legend()
+    plt.grid(True)
+    plt.savefig("final_results/discomfort_function.png")
+
+
+plot_discomfort_function()

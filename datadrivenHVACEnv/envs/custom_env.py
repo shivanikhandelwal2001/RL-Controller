@@ -13,13 +13,14 @@ class HVACEnv(gym.Env):
     A simple HVAC control environment for reinforcement learning.
     """
 
-    def __init__(self, df):
+    def __init__(self, df, controller="rl"):
         super(HVACEnv, self).__init__()
         # Assuming the temperature ranges from 0 to 50 degrees Celsius and humidity from 0% to 100%
         self.df = df
+        self.controller = controller
         self.scaler = MinMaxScaler()
 
-        self.beta = 0.3
+        self.beta = 0.5
         self.setpoint_temp = 21
         self.range_around = 2
         self.setpoint_temp_range = list(
@@ -211,7 +212,7 @@ class HVACEnv(gym.Env):
 
         cost = res["Gas_volume"].iloc[-1]
 
-        reward = -self.beta * cost - (1 - self.beta) * avg_discomfort
+        reward = -self.beta * cost - (1 - self.beta) * np.sum(temp_discomfort_normalized)
 
         return reward
 
@@ -243,6 +244,11 @@ class HVACEnv(gym.Env):
 
         if (terminated or truncated) and self.render_episodes:
             self.render()
+            
+        if self.controller == "bang_bang":
+            filtered_columns = [col for col in self.lagged_features["lags_1"] if "Air_temperature" in col]
+            bb_obs = np.mean(self.observations[filtered_columns].values)
+            return bb_obs, reward, terminated, truncated, info
 
         return observations_norm, reward, terminated, truncated, info
 
@@ -267,6 +273,11 @@ class HVACEnv(gym.Env):
 
         self.objective_integrand = 0
         self.episode_rewards = []
+        
+        if self.controller == "bang_bang":
+            filtered_columns = [col for col in self.lagged_features["lags_1"] if "Air_temperature" in col]
+            bb_obs = np.mean(self.observations[filtered_columns].values)
+            return bb_obs
 
         return observations_norm, reset_info
 

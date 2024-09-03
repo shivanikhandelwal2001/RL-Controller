@@ -1,7 +1,6 @@
 __pycache__/
-ddpg_logs/
-env_logs/
-ddpg_logs1/
-env_logs3/
+ddpg_logs*/
+env_logs*/
+env_bb_logs*/
 wandb/
 .venv

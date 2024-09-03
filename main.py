@@ -18,7 +18,6 @@ from wandb.integration.sb3 import WandbCallback
 
 import wandb
 from datadrivenHVACEnv import *
-from hvac_data import get_hvac_data
 
 warnings.filterwarnings(
     "ignore",
@@ -30,8 +29,8 @@ print(torch.cuda.is_available())
 
 config = {
     "learning_rate": 1e-4,
-    "batch_size": 64,
-    "total_timesteps": 5000000,
+    "batch_size": 32,
+    "total_timesteps": 10000000,
     "policy": "MlpPolicy",
     "action_noise_sigma": 0.1,
     "device": "cuda",
@@ -47,8 +46,8 @@ features_order = load(
 env_id = "CustomEnv-v0"
 num_envs = 10
 
-log_dir = "ddpg_logs1_1"
-model_dir = "ddpg_models1_1"
+log_dir = "ddpg_logs"
+model_dir = "ddpg_models"
 
 os.makedirs(log_dir, exist_ok=True)
 os.makedirs(model_dir, exist_ok=True)
@@ -93,8 +92,8 @@ if __name__ == "__main__":
         project="RL-Controller3",
         entity="shivani_2001",
         config=config,
-        id="shi6",
-        name="V6",
+        id="shi10",
+        name="V10",
         sync_tensorboard=True,
     )
 
@@ -105,7 +104,7 @@ if __name__ == "__main__":
     )
 
     ou_noise = OrnsteinUhlenbeckActionNoise(
-        mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions), theta=0.1
+        mean=np.zeros(n_actions), sigma=0.4 * np.ones(n_actions), theta=0.25
     )
 
     model = DDPG(
