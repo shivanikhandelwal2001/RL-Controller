@@ -13,15 +13,16 @@ class HVACEnv(gym.Env):
     A simple HVAC control environment for reinforcement learning.
     """
 
-    def __init__(self, 
-                 df=None, 
-                 n_days=28,
-                 beta=0.5,
-                 setpoint_temp=21,
-                 setpoint_humi=50,
-                 render_episodes=False,
-                 controller="rl"):
-        
+    def __init__(
+        self,
+        df=None,
+        n_days=28,
+        beta=0.5,
+        setpoint_temp=21,
+        setpoint_humi=50,
+        render_episodes=False,
+        controller="rl",
+    ):
         super(HVACEnv, self).__init__()
         # Assuming the temperature ranges from 0 to 50 degrees Celsius and humidity from 0% to 100%
         self.df = df
@@ -31,7 +32,7 @@ class HVACEnv(gym.Env):
         self.setpoint_humi = setpoint_humi
         self.render_episodes = render_episodes
         self.controller = controller
-        
+
         self.scaler = MinMaxScaler()
 
         self.temp_columns = [
@@ -196,10 +197,10 @@ class HVACEnv(gym.Env):
         humi_values = res[self.humi_columns].values
 
         temp_discomfort = temp_values - self.setpoint_temp
-        temp_discomfort = temp_discomfort ** 2
+        temp_discomfort = temp_discomfort**2
 
         humi_discomfort = humi_values - self.setpoint_humi
-        humi_discomfort = humi_discomfort ** 2
+        humi_discomfort = humi_discomfort**2
 
         temp_discomfort_normalized = self.normalize_discomfort(temp_discomfort)
         humi_discomfort_normalized = self.normalize_discomfort(humi_discomfort)
@@ -207,11 +208,15 @@ class HVACEnv(gym.Env):
         discomfort = np.sum(temp_discomfort_normalized) + np.sum(
             humi_discomfort_normalized
         )
-        avg_discomfort = (np.mean(temp_discomfort_normalized) + np.mean(humi_discomfort_normalized)) / 2
+        avg_discomfort = (
+            np.mean(temp_discomfort_normalized) + np.mean(humi_discomfort_normalized)
+        ) / 2
 
         cost = res["Gas_volume"].iloc[-1]
 
-        reward = -self.beta * cost - (1 - self.beta) * np.sum(temp_discomfort_normalized)
+        reward = -self.beta * cost - (1 - self.beta) * np.sum(
+            temp_discomfort_normalized
+        )
 
         return reward
 
@@ -236,30 +241,38 @@ class HVACEnv(gym.Env):
         truncated = self.compute_truncated()
 
         info = {
-            "info": "Step at step {}".format(self.current_step),
+            "info": "Step at step: {}".format(self.current_step),
         }
 
         observations_norm = self.get_observations(res)
 
         if (terminated or truncated) and self.render_episodes:
             self.render()
-            
+
         if self.controller == "bang_bang":
-            filtered_columns = [col for col in self.lagged_features["lags_1"] if "Air_temperature" in col]
-            bb_obs = np.mean(self.observations[filtered_columns].values)
-            return bb_obs, reward, terminated, truncated, info
+            filtered_columns = [
+                col
+                for col in self.lagged_features["lags_1"]
+                if "Air_temperature" in col
+            ]
+            bb_obs = self.observations[filtered_columns].values[0][0]
+            return (bb_obs, {}), reward, terminated, truncated, info
 
         return observations_norm, reward, terminated, truncated, info
 
     def reset(self, **kwargs):
         # Reset the state of the environment to an initial state
-        self.current_step = np.random.randint(0, self.episode_max-(self.n_days*48))
-        self.end_step = np.random.randint(self.current_step+(self.n_days*48), self.episode_max)
+        self.current_step = np.random.randint(0, self.episode_max - (self.n_days * 48))
+        self.end_step = np.random.randint(
+            self.current_step + (self.n_days * 48), self.episode_max
+        )
         self.episode += 1
 
-        self.observations = self.df.loc[
-            [self.current_step], self.control_variables
-        ].astype(np.float64).reset_index(drop=True)
+        self.observations = (
+            self.df.loc[[self.current_step], self.control_variables]
+            .astype(np.float64)
+            .reset_index(drop=True)
+        )
 
         observations = self.observations.values.astype(np.float64)
         observations_norm = self.scaler.transform(observations)[0]
@@ -268,21 +281,31 @@ class HVACEnv(gym.Env):
         self.predictions = []
 
         reset_info = {
-            "info": f"Reset at step {self.current_step}",
+            "info": f"Reset at step: {self.current_step}",
         }
 
-        self.objective_integrand = 0
         self.episode_rewards = []
-        
+
         if self.controller == "bang_bang":
-            filtered_columns = [col for col in self.lagged_features["lags_1"] if "Air_temperature" in col]
-            bb_obs = np.mean(self.observations[filtered_columns].values)
-            return bb_obs
+            filtered_columns = [
+                col
+                for col in self.lagged_features["lags_1"]
+                if "Air_temperature" in col
+            ]
+            bb_obs = self.observations[filtered_columns].values[0][0]
+            return bb_obs, {"info": f"Selected column: {self.observations[filtered_columns].columns[0]}"}
 
         return observations_norm, reset_info
 
     def render(self, mode="episodes"):
-        if self.episode % 10 == 0:
+        if self.controller == "bang_bang":
+            num = 1
+            save_to_file = "env_bb_logs"
+        else:
+            num = 10
+            save_to_file = "env_logs"
+            
+        if self.episode % num == 0:
             plot_predictions(
                 self,
                 self.episode,
@@ -290,6 +313,6 @@ class HVACEnv(gym.Env):
                 self.predictions,
                 self.state_variables,
                 self.action_variables,
-                save_to_file=True,
+                save_to_file=save_to_file,
             )
         plot_results(self, self.episode, self.episode_rewards)

@@ -94,12 +94,7 @@ if __name__ == "__main__":
     # env = Monitor(env)
     # env.unwrapped.pass_model_details(ml_model, scaler_X, scaler_y, features_order)
 
-    env = SubprocVecEnv(
-        [
-            make_env(env_id, i)
-            for i in range(num_envs)
-        ]
-    )
+    env = SubprocVecEnv([make_env(env_id, i) for i in range(num_envs)])
 
     wandb.init(
         project="RLC-BuildingB",
@@ -117,7 +112,9 @@ if __name__ == "__main__":
     )
 
     ou_noise = OrnsteinUhlenbeckActionNoise(
-        mean=np.zeros(n_actions), sigma=model_config["action_noise_sigma"] * np.ones(n_actions), theta=model_config["action_noise_theta"]
+        mean=np.zeros(n_actions),
+        sigma=model_config["action_noise_sigma"] * np.ones(n_actions),
+        theta=model_config["action_noise_theta"],
     )
 
     model = DDPG(

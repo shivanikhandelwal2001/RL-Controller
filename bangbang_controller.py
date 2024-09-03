@@ -4,8 +4,14 @@ import warnings
 import gymnasium as gym
 import numpy as np
 from joblib import load
-from datadrivenHVACEnv import *
 
+from datadrivenHVACEnv import *
+from hvac_data import get_hvac_data
+
+warnings.filterwarnings(
+    "ignore",
+    message="X does not have valid feature names, but MinMaxScaler was fitted with feature names",
+)
 
 class BangBangController:
     """
@@ -13,7 +19,7 @@ class BangBangController:
     based on the deviation of indoor temperature from the setpoint.
     """
 
-    def __init__(self, setpoint_temp=21, tolerance=2, max_gas_volume=1.0, min_gas_volume=0.0):
+    def __init__(self, setpoint_temp=21, tolerance=1):
         """
         Initialize the Bang-Bang Controller.
 
@@ -25,8 +31,7 @@ class BangBangController:
         """
         self.setpoint_temp = setpoint_temp
         self.tolerance = tolerance
-        self.max_gas_volume = max_gas_volume
-        self.min_gas_volume = min_gas_volume
+        self.action = 0
 
     def compute_action(self, current_temp):
         """
@@ -38,17 +43,19 @@ class BangBangController:
         Returns:
         - action (float): The gas volume to be used (either max or min).
         """
-        if current_temp < (self.setpoint_temp - self.tolerance):
-            # Temperature is too low; turn heating fully on
-            return self.max_gas_volume
-        elif current_temp > (self.setpoint_temp + self.tolerance):
-            # Temperature is too high; turn heating off
-            return self.min_gas_volume
-        else:
-            # Within the acceptable range; maintain current gas volume
-            return 0.5 # or max_gas_volume, depending on your setup
+        if (current_temp < (self.setpoint_temp - self.tolerance)) and (
+            self.action == 0
+        ):
+            self.action = 1
+        elif (current_temp > (self.setpoint_temp + self.tolerance)) and (
+            self.action == 1
+        ):
+            self.action = 0
+
+        return self.action
 
 
+df = get_hvac_data(file_path="simulation/BuildingB/Building08_Processed.pkl")
 ml_model = load("simulation/BuildingB/Building08_linear_regression.joblib")
 scaler_X = load("simulation/BuildingB/Building08_linear_regression_scaler_X.joblib")
 scaler_y = load("simulation/BuildingB/Building08_linear_regression_scaler_y.joblib")
@@ -56,19 +63,27 @@ features_order = load(
     "simulation/BuildingB/Building08_linear_regression_features.joblib"
 )
 
-log_dir = "bb_logs"
-os.makedirs(log_dir, exist_ok=True)
-
 env_id = "CustomEnv-v0"
 bang_bang_controller = BangBangController()
 
-env = gym.make(env_id)
+env_config = {
+    "df": df,
+    "n_days": 28,
+    "beta": 0.5,
+    "setpoint_temp": 21,
+    "setpoint_humi": 50,
+    "render_episodes": True,
+    "controller": "bang_bang",
+}
+
+env = gym.make(env_id, **env_config)
 env.unwrapped.pass_model_details(ml_model, scaler_X, scaler_y, features_order)
 
 state = env.reset()
+print(state[1]["info"])
 
 for _ in range(6000):
-    action = bang_bang_controller.compute_action(state)
+    action = bang_bang_controller.compute_action(state[0])
     state, reward, _, done, info = env.step([action])
     if done:
         break
