@@ -135,8 +135,8 @@ class HVACEnv(gym.Env):
         observations_df = observations_df[self.features_order]
 
         actual_next_state = self.df.loc[
-            self.current_step, self.state_variables + self.action_variables
-        ].values
+            [self.current_step], self.state_variables + self.action_variables
+        ]
 
         observations_df_scaled = self.scaler_X.transform(observations_df)
         next_state_scaled = self.ml_model.predict(observations_df_scaled)
@@ -147,7 +147,7 @@ class HVACEnv(gym.Env):
         )
         predicted_next_state["Gas_volume"] = action_gas_volume
 
-        self.actuals.append(actual_next_state)
+        self.actuals.append(actual_next_state.iloc[0].values)
         self.predictions.append(predicted_next_state.iloc[0].values)
 
         return predicted_next_state
@@ -158,25 +158,25 @@ class HVACEnv(gym.Env):
         if not hasattr(self, "observations"):
             self.observations = pd.DataFrame([current_control_df])
 
-        if self.current_step % 48 == 0:
-            self.observations.loc[0, self.control_variables] = current_control_df.values
-        else:
-            self.observations.loc[
-                0, [col + "_2" for col in self.state_variables]
-            ] = self.observations.loc[
-                0, [col + "_1" for col in self.state_variables]
-            ].values
-            self.observations.loc[
-                0, [col + "_1" for col in self.state_variables]
-            ] = res[self.state_variables].values
+        # if self.current_step % 12 == 0:
+        #     self.observations.loc[0, self.control_variables] = current_control_df.values
+        # else:
+        self.observations.loc[
+            0, [col + "_2" for col in self.state_variables]
+        ] = self.observations.loc[
+            0, [col + "_1" for col in self.state_variables]
+        ].values
+        self.observations.loc[
+            0, [col + "_1" for col in self.state_variables]
+        ] = res[self.state_variables].values
 
-            rem_cols = [
-                col
-                for col in self.control_variables
-                if col
-                not in self.lagged_features["lags_1"] + self.lagged_features["lags_2"]
-            ]
-            self.observations.loc[0, rem_cols] = current_control_df[rem_cols].values
+        rem_cols = [
+            col
+            for col in self.control_variables
+            if col
+            not in self.lagged_features["lags_1"] + self.lagged_features["lags_2"]
+        ]
+        self.observations.loc[0, rem_cols] = current_control_df[rem_cols].values
 
         observations = self.observations.values.astype(np.float64)
         observations_norm = self.scaler.transform(observations)[0]
@@ -193,11 +193,11 @@ class HVACEnv(gym.Env):
         return (discomfort - min_val) / (max_val - min_val)
 
     def get_reward(self, res):
-        temp_values = res[self.temp_columns].values
-        humi_values = res[self.humi_columns].values
+        temp_values = res[self.temp_columns].values[0]
+        humi_values = res[self.humi_columns].values[0]
 
-        temp_discomfort = temp_values - self.setpoint_temp
-        temp_discomfort = temp_discomfort**2
+        temp_discomfort = abs(temp_values - self.setpoint_temp)
+        # temp_discomfort = temp_discomfort**2
 
         humi_discomfort = humi_values - self.setpoint_humi
         humi_discomfort = humi_discomfort**2
@@ -215,8 +215,16 @@ class HVACEnv(gym.Env):
         cost = res["Gas_volume"].iloc[-1]
 
         reward = -self.beta * cost - (1 - self.beta) * np.sum(
-            temp_discomfort_normalized
+            temp_discomfort
         )
+        
+        # self.track.loc[len(self.track)] = [
+        #     self.current_step,
+        #     reward,
+        #     cost,
+        #     np.sum(temp_discomfort),
+        #     temp_values
+        # ]
 
         return reward
 
@@ -248,6 +256,10 @@ class HVACEnv(gym.Env):
 
         if (terminated or truncated) and self.render_episodes:
             self.render()
+            
+        # if terminated or truncated:
+        #     self.track.to_csv("track_reward_data.csv", index=False)
+        #     print(F)
 
         if self.controller == "bang_bang":
             filtered_columns = [
@@ -262,10 +274,16 @@ class HVACEnv(gym.Env):
 
     def reset(self, **kwargs):
         # Reset the state of the environment to an initial state
-        self.current_step = np.random.randint(0, self.episode_max - (self.n_days * 48))
-        self.end_step = np.random.randint(
-            self.current_step + (self.n_days * 48), self.episode_max
-        )
+        # self.track = pd.DataFrame(columns=["Step", "Reward", "Cost", "Discomfort", "Temp"])
+        
+        # self.current_step = np.random.randint(0, self.episode_max - (self.n_days * 48))
+        # self.end_step = np.random.randint(
+        #     self.current_step + (self.n_days * 48), self.episode_max
+        # )
+        
+        self.current_step = np.random.randint(0, self.episode_max - 2000)
+        self.end_step = self.current_step + 2000
+        
         self.episode += 1
 
         self.observations = (
@@ -303,7 +321,7 @@ class HVACEnv(gym.Env):
             save_to_file = "env_bb_logs"
         else:
             num = 10
-            save_to_file = "env_logs"
+            save_to_file = "env_logs3"
             
         if self.episode % num == 0:
             plot_predictions(

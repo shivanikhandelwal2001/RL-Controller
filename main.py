@@ -39,19 +39,20 @@ features_order = load(
 env_id = "CustomEnv-v0"
 num_envs = 10
 
-log_dir = "ddpg_logs"
-model_dir = "ddpg_models"
+log_dir = "ddpg_logs3"
+model_dir = "ddpg_models3"
 
 os.makedirs(log_dir, exist_ok=True)
 os.makedirs(model_dir, exist_ok=True)
 
 model_config = {
-    "learning_rate": 1e-4,
-    "batch_size": 32,
+    "learning_rate": 1e-5,
+    "batch_size": 64,
     "total_timesteps": 5000000,
     "policy": "MlpPolicy",
-    "action_noise_sigma": 0.4,
-    "action_noise_theta": 0.25,
+    "action_noise_sigma": 0.2,
+    "action_noise_theta": 0.15,
+    "gamma": 0.995,
     "device": "cuda",
 }
 
@@ -100,12 +101,17 @@ if __name__ == "__main__":
         project="RLC-BuildingB",
         entity="shivani_2001",
         config=model_config,
-        id="shi",
-        name="V1",
+        id="shi6",
+        name="V6",
         sync_tensorboard=True,
     )
 
     n_actions = env.action_space.shape[-1]
+    initial_sigma = 0.4
+    final_sigma = 0.05 
+    theta = 0.25
+    mu = np.zeros(n_actions) 
+    
     action_noise = NormalActionNoise(
         mean=np.zeros(n_actions),
         sigma=model_config["action_noise_sigma"] * np.ones(n_actions),
@@ -126,6 +132,7 @@ if __name__ == "__main__":
         device=model_config["device"],
         learning_rate=model_config["learning_rate"],
         batch_size=model_config["batch_size"],
+        gamma=model_config["gamma"],
     )
 
     eval_callback = EvalCallback(
