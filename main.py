@@ -46,13 +46,13 @@ features_order = load(
 )
 
 model_config = {
-    "learning_rate": 1e-4,
-    "batch_size": 64,
+    "learning_rate": 1e-3,
+    "batch_size": 32,
     "total_timesteps": 1000000,
     "policy": "MlpPolicy",
-    "action_noise_sigma": 0.3,
-    "action_noise_theta": 0.15,
-    "gamma": 0.995,
+    "action_noise_sigma": 0.4,
+    "action_noise_theta": 0.25,
+    "gamma": 0.999,
     "device": "cuda",
 }
 
@@ -98,19 +98,15 @@ if __name__ == "__main__":
     env = SubprocVecEnv([make_env(env_id, i) for i in range(num_envs)])
 
     wandb.init(
-        project="RLC-BuildingB",
+        project=building_id[0],
         entity="shivani_2001",
         config=model_config,
-        id="shi10",
+        id="shi1",
         name="V10",
         sync_tensorboard=True,
     )
 
     n_actions = env.action_space.shape[-1]
-    initial_sigma = 0.4
-    final_sigma = 0.05 
-    theta = 0.25
-    mu = np.zeros(n_actions) 
     
     action_noise = NormalActionNoise(
         mean=np.zeros(n_actions),

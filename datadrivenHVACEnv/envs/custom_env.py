@@ -157,10 +157,7 @@ class HVACEnv(gym.Env):
 
         if not hasattr(self, "observations"):
             self.observations = pd.DataFrame([current_control_df])
-
-        # if self.current_step % 12 == 0:
-        #     self.observations.loc[0, self.control_variables] = current_control_df.values
-        # else:
+            
         self.observations.loc[
             0, [col + "_2" for col in self.state_variables]
         ] = self.observations.loc[
@@ -183,21 +180,11 @@ class HVACEnv(gym.Env):
 
         return observations_norm
 
-    def normalize_discomfort(self, discomfort):
-        min_val = np.min(discomfort)
-        max_val = np.max(discomfort)
-
-        if max_val == min_val:
-            return np.zeros_like(discomfort)
-
-        return (discomfort - min_val) / (max_val - min_val)
-
     def get_reward(self, res):
         temp_values = res[self.temp_columns].values[0]
         humi_values = res[self.humi_columns].values[0]
 
-        # temp_discomfort = abs(temp_values - self.setpoint_temp)
-        temp_discomfort = np.where((temp_values >= self.setpoint_temp-2) & (temp_values <= self.setpoint_temp+2), 0, abs(temp_values - self.setpoint_temp))
+        temp_discomfort = abs(temp_values - self.setpoint_temp)
         humi_discomfort = abs(humi_values - self.setpoint_humi)
         
         phi = lambda x: np.tanh(x)
@@ -206,17 +193,8 @@ class HVACEnv(gym.Env):
         cost = res["Gas_volume"].iloc[-1]
 
         reward = -self.beta * cost - (1 - self.beta) * np.sum(
-            temp_discomfort
+            temp_discomfort_norm
         )
-        
-        # self.track.loc[len(self.track)] = [
-        #     self.current_step,
-        #     reward,
-        #     cost,
-        #     np.sum(temp_discomfort_norm),
-        #     temp_discomfort_norm,
-        #     temp_values
-        # ]
 
         return reward
     
@@ -232,17 +210,8 @@ class HVACEnv(gym.Env):
         cost = res["Gas_volume"].iloc[-1]
 
         reward = -self.beta * cost - (1 - self.beta) * np.sum(
-            temp_discomfort
+            temp_discomfort_norm
         )
-        
-        # self.track.loc[len(self.track)] = [
-        #     self.current_step,
-        #     reward,
-        #     cost,
-        #     np.sum(temp_discomfort),
-        #     temp_discomfort,
-        #     temp_values
-        # ]
 
         return reward
 
@@ -274,10 +243,6 @@ class HVACEnv(gym.Env):
 
         if (terminated or truncated) and self.render_episodes:
             self.render()
-            
-        # if terminated or truncated:
-        #     self.track.to_csv("track_reward_data.csv", index=False)
-        #     print(F)
 
         if self.controller == "bang_bang":
             filtered_columns = [
@@ -292,12 +257,6 @@ class HVACEnv(gym.Env):
 
     def reset(self, **kwargs):
         # Reset the state of the environment to an initial state
-        # self.track = pd.DataFrame(columns=["Step", "Reward", "Cost", "Discomfort", "Temp norm", "Temp"])
-        
-        # self.current_step = np.random.randint(0, self.episode_max - (self.n_days * 48))
-        # self.end_step = np.random.randint(
-        #     self.current_step + (self.n_days * 48), self.episode_max
-        # )
         
         self.current_step = np.random.randint(0, self.episode_max - 2000)
         self.end_step = self.current_step + 2000
@@ -339,7 +298,7 @@ class HVACEnv(gym.Env):
             save_to_file = "env_bb_logs"
         else:
             num = 10
-            save_to_file = "env_logs5"
+            save_to_file = "env_logs_BuildingA"
             
         if self.episode % num == 0:
             plot_predictions(
