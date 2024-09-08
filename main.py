@@ -27,30 +27,30 @@ warnings.filterwarnings(
 
 print(torch.cuda.is_available())
 
-
-df = get_hvac_data(file_path="simulation/BuildingB/Building08_Processed.pkl")
-ml_model = load("simulation/BuildingB/Building08_linear_regression.joblib")
-scaler_X = load("simulation/BuildingB/Building08_linear_regression_scaler_X.joblib")
-scaler_y = load("simulation/BuildingB/Building08_linear_regression_scaler_y.joblib")
-features_order = load(
-    "simulation/BuildingB/Building08_linear_regression_features.joblib"
-)
-
+building_id = ["BuildingA", "Building01"]
 env_id = "CustomEnv-v0"
 num_envs = 10
 
-log_dir = "ddpg_logs3"
-model_dir = "ddpg_models3"
+log_dir = f"ddpg_logs_{building_id[0]}"
+model_dir = f"ddpg_models_{building_id[0]}"
 
 os.makedirs(log_dir, exist_ok=True)
 os.makedirs(model_dir, exist_ok=True)
 
+df = get_hvac_data(file_path=f"simulation/{building_id[0]}/{building_id[1]}_Processed.pkl")
+ml_model = load(f"simulation/{building_id[0]}/{building_id[1]}_linear_regression.joblib")
+scaler_X = load(f"simulation/{building_id[0]}/{building_id[1]}_linear_regression_scaler_X.joblib")
+scaler_y = load(f"simulation/{building_id[0]}/{building_id[1]}_linear_regression_scaler_y.joblib")
+features_order = load(
+    f"simulation/{building_id[0]}/{building_id[1]}_linear_regression_features.joblib"
+)
+
 model_config = {
-    "learning_rate": 1e-5,
+    "learning_rate": 1e-4,
     "batch_size": 64,
-    "total_timesteps": 5000000,
+    "total_timesteps": 1000000,
     "policy": "MlpPolicy",
-    "action_noise_sigma": 0.2,
+    "action_noise_sigma": 0.3,
     "action_noise_theta": 0.15,
     "gamma": 0.995,
     "device": "cuda",
@@ -101,8 +101,8 @@ if __name__ == "__main__":
         project="RLC-BuildingB",
         entity="shivani_2001",
         config=model_config,
-        id="shi6",
-        name="V6",
+        id="shi10",
+        name="V10",
         sync_tensorboard=True,
     )
 
